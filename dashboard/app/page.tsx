@@ -22,6 +22,47 @@ export default function DashboardPage() {
 
   const [workers, setWorkers] = useState<any[]>([]);
 
+  // Load from localStorage after mount (client-side only)
+  useEffect(() => {
+    const loadMetrics = () => {
+      const saved = localStorage.getItem('dashboardMetrics');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          console.log('Dashboard: Loading metrics from localStorage:', parsed);
+          setMetrics(parsed);
+        } catch (e) {
+          console.error('Failed to load metrics:', e);
+        }
+      }
+    };
+
+    loadMetrics();
+
+    // Reload metrics when page becomes visible (when user navigates back)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('Dashboard: Page visible, reloading metrics');
+        loadMetrics();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // Save metrics to localStorage whenever they change
+  useEffect(() => {
+    if (metrics.totalRequests !== 1245 || metrics.workerRequests !== 4980) {
+      // Only save if values have changed from defaults
+      localStorage.setItem('dashboardMetrics', JSON.stringify(metrics));
+      console.log('Dashboard: Saving metrics to localStorage:', metrics);
+    }
+  }, [metrics]);
+
   // Fetch real worker data from Kubernetes
   useEffect(() => {
     const fetchWorkers = async () => {
@@ -41,20 +82,30 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Only update when queries are executed
+  // Update metrics when queries are executed
   useEffect(() => {
-    const handleQueryEvent = () => {
-      setMetrics(prev => ({
-        totalRequests: prev.totalRequests + 1,  // Always increment
-        avgLatency: 0.03 + Math.random() * 0.04,
-        workerRequests: prev.workerRequests + 4, // Always increment (4 workers)
-        dynamicSplits: prev.dynamicSplits + 1,   // Always increment
-      }));
+    const handleQueryEvent = (event: any) => {
+      console.log('Query event received!', event.detail);
+      const latency = event.detail?.latency || (0.03 + Math.random() * 0.04);
+      setMetrics(prev => {
+        const newMetrics = {
+          totalRequests: prev.totalRequests + 1,
+          avgLatency: latency,
+          workerRequests: prev.workerRequests + (workers.length || 4),
+          dynamicSplits: prev.dynamicSplits + 1,
+        };
+        console.log('Updating metrics:', prev, '->', newMetrics);
+        return newMetrics;
+      });
     };
 
+    console.log('Dashboard: Setting up query event listener');
     window.addEventListener('queryExecuted', handleQueryEvent);
-    return () => window.removeEventListener('queryExecuted', handleQueryEvent);
-  }, []);
+    return () => {
+      console.log('Dashboard: Removing query event listener');
+      window.removeEventListener('queryExecuted', handleQueryEvent);
+    };
+  }, [workers.length]);
 
   const metricCards: MetricCard[] = [
     {

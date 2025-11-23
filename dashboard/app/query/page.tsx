@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Play, Clock, Database, ArrowRight, CheckCircle, AlertCircle, Loader2, Zap } from "lucide-react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -12,12 +12,55 @@ export default function QueryPage() {
   const [result, setResult] = useState<any>(null);
   const [executionPlan, setExecutionPlan] = useState<any[]>([]);
   const [cpuUsage, setCpuUsage] = useState(12);
+  const [workerCount, setWorkerCount] = useState(4);
+
+  // Fetch real worker count
+  useEffect(() => {
+    const fetchWorkerCount = async () => {
+      try {
+        const response = await fetch('/api/k8s-status');
+        const data = await response.json();
+        if (data.totalWorkers) {
+          setWorkerCount(data.totalWorkers);
+        }
+      } catch (error) {
+        console.error('Failed to fetch worker count:', error);
+      }
+    };
+
+    fetchWorkerCount();
+    const interval = setInterval(fetchWorkerCount, 5000); // Update every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   const executeQuery = async () => {
     setLoading(true);
     setResult(null);
     setExecutionPlan([]);
     setCpuUsage(85); // Spike during query execution
+    
+    // Increment metrics in localStorage immediately
+    try {
+      const saved = localStorage.getItem('dashboardMetrics');
+      const currentMetrics = saved ? JSON.parse(saved) : {
+        totalRequests: 1245,
+        avgLatency: 0.045,
+        workerRequests: 4980,
+        dynamicSplits: 312,
+      };
+      
+      const updatedMetrics = {
+        totalRequests: currentMetrics.totalRequests + 1,
+        avgLatency: currentMetrics.avgLatency,
+        workerRequests: currentMetrics.workerRequests + workerCount, // Use actual worker count
+        dynamicSplits: currentMetrics.dynamicSplits + 1,
+      };
+      
+      localStorage.setItem('dashboardMetrics', JSON.stringify(updatedMetrics));
+      console.log('Metrics updated in localStorage:', updatedMetrics);
+    } catch (e) {
+      console.error('Failed to update metrics:', e);
+    }
     
     const startTime = performance.now();
     
@@ -65,8 +108,12 @@ export default function QueryPage() {
         status: "success"
       });
 
-      // Notify dashboard of query execution
-      window.dispatchEvent(new CustomEvent('queryExecuted'));
+      // Notify dashboard of query execution with actual latency
+      const eventDetail = { latency: parseFloat(duration) / 1000 };
+      console.log('Query page: Dispatching queryExecuted event', eventDetail);
+      window.dispatchEvent(new CustomEvent('queryExecuted', {
+        detail: eventDetail
+      }));
 
     } catch (error) {
       console.error("Query execution error:", error);
@@ -247,7 +294,7 @@ export default function QueryPage() {
             <h3 className="text-sm font-semibold text-blue-200 mb-2">System Health</h3>
             <div className="flex items-center gap-2 mb-4">
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-2xl font-bold text-white">4 / 4</span>
+              <span className="text-2xl font-bold text-white">{workerCount} / {workerCount}</span>
               <span className="text-blue-200">Workers Active</span>
             </div>
             <div className="space-y-2">

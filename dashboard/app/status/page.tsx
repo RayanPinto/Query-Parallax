@@ -15,17 +15,31 @@ export default function StatusPage() {
         const data = await response.json();
         
         if (data.workers) {
-          setWorkers(data.workers);
+          setWorkers(prev => {
+            // If we already have workers with request counts, preserve them
+            if (prev.length > 0) {
+              return data.workers.map((newWorker: any) => {
+                const existing = prev.find(w => w.name === newWorker.name);
+                return {
+                  ...newWorker,
+                  requests: existing ? existing.requests : newWorker.requests
+                };
+              });
+            }
+            return data.workers;
+          });
         }
       } catch (error) {
         console.error('Failed to fetch K8s status:', error);
         // Fallback to mock data if API fails
-        setWorkers([
-          { id: 1, name: "worker-1", status: "online", cpu: 12, memory: 24, requests: 1450, uptime: "28m" },
-          { id: 2, name: "worker-2", status: "online", cpu: 18, memory: 28, requests: 1520, uptime: "28m" },
-          { id: 3, name: "worker-3", status: "online", cpu: 15, memory: 25, requests: 1610, uptime: "28m" },
-          { id: 4, name: "worker-4", status: "online", cpu: 11, memory: 22, requests: 1380, uptime: "28m" },
-        ]);
+        if (workers.length === 0) {
+          setWorkers([
+            { id: 1, name: "worker-1", status: "online", cpu: 12, memory: 24, requests: 0, uptime: "28m" },
+            { id: 2, name: "worker-2", status: "online", cpu: 18, memory: 28, requests: 0, uptime: "28m" },
+            { id: 3, name: "worker-3", status: "online", cpu: 15, memory: 25, requests: 0, uptime: "28m" },
+            { id: 4, name: "worker-4", status: "online", cpu: 11, memory: 22, requests: 0, uptime: "28m" },
+          ]);
+        }
       } finally {
         setLoading(false);
       }
@@ -35,6 +49,19 @@ export default function StatusPage() {
     const interval = setInterval(fetchK8sStatus, 5000); // Refresh every 5 seconds
     
     return () => clearInterval(interval);
+  }, []);
+
+  // Increment requests when queries are executed
+  useEffect(() => {
+    const handleQueryEvent = () => {
+      setWorkers(prev => prev.map(w => ({
+        ...w,
+        requests: w.requests + 1, // Each worker handles the query
+      })));
+    };
+
+    window.addEventListener('queryExecuted', handleQueryEvent);
+    return () => window.removeEventListener('queryExecuted', handleQueryEvent);
   }, []);
 
   if (loading) {
