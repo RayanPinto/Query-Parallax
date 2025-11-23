@@ -1,68 +1,115 @@
 import os
 import httpx
+import asyncpg
 from fastapi import FastAPI, HTTPException
 from sqlglot import parse_one, exp
-from prometheus_client import Counter, start_http_server
+from prometheus_client import Counter, Histogram, Gauge, start_http_server
+import time
 
 app = FastAPI()
 
-# Prometheus counters (optional but nice)
+# Prometheus metrics
 REQ_TOTAL = Counter("dispatcher_requests_total", "All incoming /query requests")
-SPLIT_TOTAL = Counter("dispatcher_splits_total", "Number of sub‑queries created")
+SPLIT_TOTAL = Counter("dispatcher_splits_total", "Number of sub-queries created")
+AGG_QUERIES = Counter("dispatcher_aggregate_queries_total", "Aggregate queries", ["agg_type"])
+DYNAMIC_SPLITS = Counter("dispatcher_dynamic_splits_total", "Queries split dynamically (no explicit BETWEEN)")
+QUERY_LATENCY = Histogram("dispatcher_query_duration_seconds", "Query latency", ["query_type"])
+WORKER_REQUESTS = Counter("dispatcher_worker_requests_total", "Total requests sent to workers")
+ACTIVE_QUERIES = Gauge("dispatcher_active_queries", "Currently processing queries")
 
 # Where workers live (Docker‑Compose service name)
 WORKER_URL = os.getenv("WORKER_URL", "http://worker-svc:8001/execute")
 MAX_PARTS = int(os.getenv("MAX_PARTS", "4"))   # how many parallel pieces per query
+DB_DSN = os.getenv("DB_DSN", "postgres://user:pw@postgres:5432/demo")
+
+# Database connection pool (initialized on startup)
+db_pool = None
+
+async def get_table_bounds(table_name: str, partition_col: str = "id"):
+    """
+    Query the database to find min/max values for dynamic splitting.
+    Returns: (min_val, max_val) or (None, None) if not found
+    """
+    try:
+        async with db_pool.acquire() as conn:
+            query = f"SELECT MIN({partition_col}), MAX({partition_col}) FROM {table_name}"
+            row = await conn.fetchrow(query)
+            if row and row[0] is not None and row[1] is not None:
+                return (row[0], row[1])
+    except Exception as e:
+        print(f"Error querying bounds: {e}")
+    return (None, None)
+
+def extract_table_name(parsed):
+    """Extract the main table name from a SELECT query."""
+    if not isinstance(parsed, exp.Select):
+        return None
+    
+    # Find the FROM clause
+    from_clause = parsed.args.get("from")
+    if from_clause:
+        # Get the first table
+        for table in from_clause.find_all(exp.Table):
+            return table.name
+    return None
 
 def can_split(parsed):
-    """Very simple heuristic – split only SELECTs with a numeric BETWEEN."""
+    """Determine if a query can be split. Now supports queries without explicit BETWEEN."""
     if not isinstance(parsed, exp.Select):
         return False
-    where = parsed.args.get("where")
-    if not where:
-        return False
-    # look for a BETWEEN or >/< on a column named `id` (customize as needed)
-    for node in where.find_all((exp.Between, exp.GT, exp.LT)):
-        return True
-    return False
+    
+    # We can split any SELECT query that has a table
+    table_name = extract_table_name(parsed)
+    return table_name is not None
 
-def make_subqueries(sql, n_parts=MAX_PARTS):
-    """Naïve range partition on a column called `id`."""
+async def make_subqueries(sql, n_parts=MAX_PARTS):
+    """Intelligent range partition using dynamic database bounds."""
     parsed = parse_one(sql)
-    where = parsed.args["where"]
-    # extract column name and numeric bounds (assumes `id BETWEEN a AND b`)
-    col = None
-    low, high = None, None
-    for node in where.find_all(exp.Column):
-        col = node.name
-    literals = [int(l.this) for l in where.find_all(exp.Literal) if l.this.isdigit()]
-    if len(literals) >= 2:
-        low, high = literals[0], literals[1]
-    if not (col and low is not None and high is not None):
-        # fallback – no safe split, just return the original query
+    table_name = extract_table_name(parsed)
+    
+    if not table_name:
         return [sql]
-
+    
+    # Try to extract explicit bounds from WHERE clause first
+    where = parsed.args.get("where")
+    col = "id"  # Default partition column
+    low, high = None, None
+    
+    if where:
+        # Extract column name and bounds from BETWEEN clause
+        for node in where.find_all(exp.Column):
+            col = node.name
+        literals = [int(l.this) for l in where.find_all(exp.Literal) if l.this.isdigit()]
+        if len(literals) >= 2:
+            low, high = literals[0], literals[1]
+    
+    # If no explicit bounds, query the database
+    if low is None or high is None:
+        low, high = await get_table_bounds(table_name, col)
+        if low is None or high is None:
+            # Can't determine bounds, don't split
+            return [sql]
+    
+    # Create n_parts sub-queries
     step = (high - low + 1) // n_parts
     subs = []
     for i in range(n_parts):
         start = low + i * step
         end = low + (i + 1) * step - 1 if i < n_parts - 1 else high
-        # Create a new BETWEEN expression: col BETWEEN start AND end
-        # We use exp.Between(this=col_expression, low=start_expression, high=end_expression)
-        # Note: sqlglot's Between structure might vary slightly by version, but typically:
-        # exp.Between(this=..., low=..., high=...)
         
-        # Safer way: parse the new condition string, which sqlglot handles well
+        # Create new WHERE condition
         new_cond = parse_one(f"{col} BETWEEN {start} AND {end}")
         
         sub_sql = parsed.copy()
-        # We need to replace the *existing* BETWEEN node in the WHERE clause
-        # The current code sets 'where' to just the new condition, which wipes out other AND conditions if they existed.
-        # But for this MVP (and the test query), it's fine to overwrite the WHERE if it was just a simple BETWEEN.
-        # However, the error "syntax error at or near 1" suggests the generated SQL is malformed.
-        # Let's ensure we are replacing the correct node or setting the where clause correctly.
         
-        sub_sql.set("where", exp.Where(this=new_cond))
+        if where:
+            # Combine with existing WHERE clause using AND
+            combined = exp.And(this=where.this, expression=new_cond)
+            sub_sql.set("where", exp.Where(this=combined))
+        else:
+            # No existing WHERE, just add the BETWEEN
+            sub_sql.set("where", exp.Where(this=new_cond))
+        
         subs.append(sub_sql.sql())
     return subs
 
@@ -142,35 +189,69 @@ def merge_aggregates(responses, agg_type):
 
 @app.post("/query")
 async def dispatch(payload: dict):
-    REQ_TOTAL.inc()
-    sql = payload.get("sql")
-    if not sql:
-        raise HTTPException(status_code=400, detail="Missing `sql` field")
-
-    parsed = parse_one(sql)
+    start_time = time.time()
+    ACTIVE_QUERIES.inc()
     
-    # Detect if this is an aggregate query
-    has_aggregate, agg_type, agg_column = detect_aggregation(parsed)
-    
-    subqueries = make_subqueries(sql) if can_split(parsed) else [sql]
-    SPLIT_TOTAL.inc(len(subqueries))
+    try:
+        REQ_TOTAL.inc()
+        sql = payload.get("sql")
+        if not sql:
+            raise HTTPException(status_code=400, detail="Missing `sql` field")
 
-    import asyncio
-    async with httpx.AsyncClient() as client:
-        tasks = [client.post(WORKER_URL, json={"sql": q}) for q in subqueries]
-        responses = await asyncio.gather(*tasks)
+        parsed = parse_one(sql)
+        
+        # Detect if this is an aggregate query
+        has_aggregate, agg_type, agg_column = detect_aggregation(parsed)
+        
+        if has_aggregate:
+            AGG_QUERIES.labels(agg_type=agg_type).inc()
+        
+        # Check if splitting will be dynamic
+        where = parsed.args.get("where")
+        if not where or not list(where.find_all(exp.Literal)):
+            DYNAMIC_SPLITS.inc()
+        
+        subqueries = await make_subqueries(sql) if can_split(parsed) else [sql]
+        SPLIT_TOTAL.inc(len(subqueries))
+        WORKER_REQUESTS.inc(len(subqueries))
 
-    # Use appropriate merge strategy based on query type
-    if has_aggregate:
-        return merge_aggregates(responses, agg_type)
-    else:
-        # Standard row concatenation for non-aggregate queries
-        merged = []
-        for r in responses:
-            if r.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"Worker error: {r.text}")
-            merged.extend(r.json()["rows"])
-        return {"rows": merged}
+        import asyncio
+        async with httpx.AsyncClient() as client:
+            tasks = [client.post(WORKER_URL, json={"sql": q}) for q in subqueries]
+            responses = await asyncio.gather(*tasks)
+
+        # Use appropriate merge strategy based on query type
+        if has_aggregate:
+            result = merge_aggregates(responses, agg_type)
+        else:
+            # Standard row concatenation for non-aggregate queries
+            merged = []
+            for r in responses:
+                if r.status_code != 200:
+                    raise HTTPException(status_code=502, detail=f"Worker error: {r.text}")
+                merged.extend(r.json()["rows"])
+            result = {"rows": merged}
+        
+        # Record latency
+        query_type = f"{agg_type}_aggregate" if has_aggregate else "select"
+        QUERY_LATENCY.labels(query_type=query_type).observe(time.time() - start_time)
+        
+        return result
+    finally:
+        ACTIVE_QUERIES.dec()
+
+@app.on_event("startup")
+async def startup():
+    global db_pool
+    db_pool = await asyncpg.create_pool(DB_DSN, min_size=2, max_size=10)
+    print(f"Database pool created: {DB_DSN}")
+
+@app.on_event("shutdown")
+async def shutdown():
+    global db_pool
+    if db_pool:
+        await db_pool.close()
+        print("Database pool closed")
 
 if __name__ == "__main__":
     # expose Prometheus metrics on :8002

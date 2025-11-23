@@ -17,10 +17,12 @@ services:
     environment:
       - WORKER_URL=http://worker:8001/execute
       - MAX_PARTS=4
+      - DB_DSN=postgres://user:pw@postgres:5432/demo
     ports:
       - "8000:8000"
     depends_on:
       - worker
+      - postgres
 
   worker:
     build:

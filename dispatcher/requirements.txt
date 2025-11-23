@@ -3,3 +3,4 @@ uvicorn[standard]
 sqlglot
 httpx
 prometheus-client
+asyncpg
