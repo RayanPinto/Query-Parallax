@@ -11,11 +11,13 @@ export default function QueryPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [executionPlan, setExecutionPlan] = useState<any[]>([]);
+  const [cpuUsage, setCpuUsage] = useState(12);
 
   const executeQuery = async () => {
     setLoading(true);
     setResult(null);
     setExecutionPlan([]);
+    setCpuUsage(85); // Spike during query execution
     
     const startTime = performance.now();
     
@@ -63,6 +65,9 @@ export default function QueryPage() {
         status: "success"
       });
 
+      // Notify dashboard of query execution
+      window.dispatchEvent(new CustomEvent('queryExecuted'));
+
     } catch (error) {
       console.error("Query execution error:", error);
       setResult({ 
@@ -71,6 +76,8 @@ export default function QueryPage() {
       });
     } finally {
       setLoading(false);
+      // CPU usage drops after query completes
+      setTimeout(() => setCpuUsage(12 + Math.floor(Math.random() * 8)), 1000);
     }
   };
 
@@ -246,10 +253,13 @@ export default function QueryPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-blue-300">
                 <span>CPU Usage</span>
-                <span>12%</span>
+                <span>{cpuUsage}%</span>
               </div>
               <div className="w-full bg-blue-950 rounded-full h-1.5">
-                <div className="bg-blue-400 h-1.5 rounded-full" style={{ width: "12%" }} />
+                <div 
+                  className="bg-blue-400 h-1.5 rounded-full transition-all duration-500" 
+                  style={{ width: `${cpuUsage}%` }} 
+                />
               </div>
             </div>
           </div>
