@@ -243,7 +243,7 @@ export default function QueryPage() {
               {[
                 { title: "Query Parsing", desc: "SQLGlot AST Analysis", icon: Database },
                 { title: "Partitioning", desc: "Dynamic Range Calculation", icon: ArrowRight },
-                { title: "Distributed Execution", desc: "4 Parallel Workers", icon: Zap },
+                { title: "Distributed Execution", desc: `${workerCount} Parallel Workers`, icon: Zap },
                 { title: "Aggregation", desc: "Map-Reduce Merge", icon: CheckCircle },
               ].map((step, idx) => {
                 const isActive = executionPlan.length > idx;
@@ -274,8 +274,8 @@ export default function QueryPage() {
                       
                       {/* Worker Visualization for Step 3 */}
                       {idx === 2 && isActive && (
-                        <div className="mt-3 grid grid-cols-4 gap-2">
-                          {[1, 2, 3, 4].map(w => (
+                        <div className={`mt-3 grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(workerCount, 10)}, 1fr)` }}>
+                          {Array.from({ length: Math.min(workerCount, 10) }).map((_, w) => (
                             <div key={w} className="h-1.5 rounded-full bg-gray-700 overflow-hidden">
                               <div className="h-full bg-green-500 animate-progress origin-left" style={{ animationDelay: `${w * 0.1}s` }} />
                             </div>
