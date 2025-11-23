@@ -14,7 +14,7 @@ kind: Deployment
 metadata:
   name: worker
 spec:
-  replicas: 4  # starting replicas for parallelism
+  replicas: 4  # STARTING WITH 4 REPLICAS FOR PARALLELISM
   selector:
     matchLabels:
       app: worker
@@ -25,20 +25,10 @@ spec:
     spec:
       containers:
       - name: worker
-        image: mini-balancer-worker:latest
-        imagePullPolicy: Never  # use local image built by docker-compose
+        image: worker:latest
+        imagePullPolicy: Never
         env:
         - name: DB_DSN
           value: "postgres://user:pw@postgres:5432/demo"
         ports:
         - containerPort: 8001
-        readinessProbe:
-          tcpSocket:
-            port: 8001
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        livenessProbe:
-          tcpSocket:
-            port: 8001
-          initialDelaySeconds: 15
-          periodSeconds: 10

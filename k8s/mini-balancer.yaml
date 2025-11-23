@@ -43,7 +43,7 @@ spec:
     spec:
       containers:
       - name: mini-balancer
-        image: mini-balancer-mini-balancer:latest
+        image: mini-balancer:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 8089
