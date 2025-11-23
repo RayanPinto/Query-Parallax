@@ -20,6 +20,27 @@ export default function DashboardPage() {
     dynamicSplits: 312,
   });
 
+  const [workers, setWorkers] = useState<any[]>([]);
+
+  // Fetch real worker data from Kubernetes
+  useEffect(() => {
+    const fetchWorkers = async () => {
+      try {
+        const response = await fetch('/api/k8s-status');
+        const data = await response.json();
+        if (data.workers) {
+          setWorkers(data.workers);
+        }
+      } catch (error) {
+        console.error('Failed to fetch workers:', error);
+      }
+    };
+
+    fetchWorkers();
+    const interval = setInterval(fetchWorkers, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
+
   // Only update when queries are executed
   useEffect(() => {
     const handleQueryEvent = () => {
@@ -84,12 +105,17 @@ export default function DashboardPage() {
     { name: "AVG", value: 5, color: "#ef4444" },
   ];
 
-  const workerLoadData = [
-    { worker: "Worker 1", load: 23 },
-    { worker: "Worker 2", load: 28 },
-    { worker: "Worker 3", load: 25 },
-    { worker: "Worker 4", load: 24 },
-  ];
+  const workerLoadData = workers.length > 0 
+    ? workers.map(w => ({
+        worker: `Worker ${w.id}`,
+        load: Math.floor(w.cpu) // Use real CPU usage as load
+      }))
+    : [
+        { worker: "Worker 1", load: 23 },
+        { worker: "Worker 2", load: 28 },
+        { worker: "Worker 3", load: 25 },
+        { worker: "Worker 4", load: 24 },
+      ];
 
   return (
     <div className="p-8 space-y-8">
