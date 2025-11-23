@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mini-balancer-config
+data:
+  config.yaml: |
+    schema: http
+    port: 8089
+    tcp_health_check: true
+    health_check_interval: 3
+    max_allowed: 100
+    location:
+      - pattern: /query
+        proxy_pass:
+          - "http://dispatcher:8000"
+        balance_mode: round-robin
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mini-balancer
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8089
+    targetPort: 8089
+  selector:
+    app: mini-balancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mini-balancer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mini-balancer
+  template:
+    metadata:
+      labels:
+        app: mini-balancer
+    spec:
+      containers:
+      - name: mini-balancer
+        image: mini-balancer-mini-balancer:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8089
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config.yaml
+          subPath: config.yaml
+      volumes:
+      - name: config-volume
+        configMap:
+          name: mini-balancer-config

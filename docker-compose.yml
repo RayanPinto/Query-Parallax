@@ -1,0 +1,45 @@
+version: "3.9"
+services:
+  mini-balancer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+      - dispatcher
+
+  dispatcher:
+    build:
+      context: ./dispatcher
+    environment:
+      - WORKER_URL=http://worker:8001/execute
+      - MAX_PARTS=4
+    ports:
+      - "8000:8000"
+    depends_on:
+      - worker
+
+  worker:
+    build:
+      context: ./worker
+    environment:
+      - DB_DSN=postgres://user:pw@postgres:5432/demo
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pw
+      POSTGRES_DB: demo
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
