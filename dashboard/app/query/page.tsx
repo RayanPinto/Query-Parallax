@@ -101,10 +101,16 @@ export default function QueryPage() {
         return [...newPlan, { step: "Aggregating Results", status: "completed", time: "5ms" }];
       });
 
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const rows = data.rows || [];
+
       setResult({
-        data: data.rows,
+        data: rows,
         duration: duration,
-        rows: data.rows.length,
+        rows: rows.length,
         status: "success"
       });
 

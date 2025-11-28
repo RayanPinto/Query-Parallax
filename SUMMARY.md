@@ -124,6 +124,7 @@ mini-balancer/
 $env:MINIKUBE_HOME = "D:\MinikubeData"
 minikube start
 .\deploy_k8s.ps1
+.\init_k8s_database.ps1  # <--- CRITICAL: Populates database
 minikube service mini-balancer --url  # Keep running
 cd dashboard && npm run dev
 ```

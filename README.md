@@ -20,7 +20,7 @@ cd d:\Z_final_pbl\mini-balancer
 # Deploy to Kubernetes
 .\deploy_k8s.ps1
 
-# Initialize database
+# Initialize database (CRITICAL: Run this every time you restart Minikube!)
 .\init_k8s_database.ps1
 
 # Get service URL (keep this terminal open)
