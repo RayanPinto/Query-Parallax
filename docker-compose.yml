@@ -1,0 +1,75 @@
+version: "3.9"
+services:
+  mini-balancer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+      - dispatcher
+
+  dispatcher:
+    build:
+      context: ./dispatcher
+    environment:
+      - WORKER_URL=http://worker:8001/execute
+      - MAX_PARTS=4
+      - DB_DSN=postgres://user:pw@postgres:5432/demo
+    ports:
+      - "8000:8000"
+    depends_on:
+      - worker
+      - postgres
+
+  worker:
+    build:
+      context: ./worker
+    environment:
+      - DB_DSN=postgres://user:pw@postgres:5432/demo
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pw
+      POSTGRES_DB: demo
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    depends_on:
+      - dispatcher
+
+  # Grafana - temporarily disabled, use Prometheus directly at localhost:9090
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #     - GF_SECURITY_ADMIN_USER=admin
+  #   volumes:
+  #     - ./grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+  #     - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+  #   depends_on:
+  #     - prometheus

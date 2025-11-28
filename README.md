@@ -1,116 +1,104 @@
-# mini-balancer
+# Adaptive Task Dispatcher for Dynamic Query Parallelization
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/wanzo-mini/mini-balancer)](https://goreportcard.com/report/github.com/wanzo-mini/mini-balancer)&nbsp;![GitHub top language](https://img.shields.io/github/languages/top/wanzo-mini/mini-balancer)&nbsp;![GitHub](https://img.shields.io/github/license/wanzo-mini/mini-balancer)&nbsp;[![CodeFactor](https://www.codefactor.io/repository/github/wanzo-mini/mini-balancer/badge)](https://www.codefactor.io/repository/github/wanzo-mini/mini-balancer)&nbsp;[![codecov](https://codecov.io/gh/wanzo-mini/mini-balancer/branch/main/graph/badge.svg)](https://codecov.io/gh/wanzo-mini/mini-balancer)&nbsp; ![go_version](https://img.shields.io/badge/go%20version-1.17-yellow)
+## Quick Start Guide
 
-`mini-balancer` is a layer 7 load mini-balancer that supports http and https, and it is also a go library that implements `load balancing` algorithms.
+### Prerequisites
+- Docker Desktop running
+- Minikube installed
+- Node.js installed
 
-It currently supports load balancing algorithms: 
-* `round-robin`
-* `random`
-* `power of 2 random choice`
-* `consistent hash`
-* `consistent hash with bounded`
-* `ip-hash`
-* `least-load`
+### Starting the System
 
-## Install
-First download the source code of mini-balancer:
-```shell
-> git clone https://github.com/wanzo-mini/mini-balancer.git
-```
-compile the source code:
-```shell
-> cd ./mini-balancer
+```powershell
+# Set Minikube home
+$env:MINIKUBE_HOME = "D:\MinikubeData"
 
-> go build
-```
+# Start Minikube
+cd d:\Z_final_pbl\mini-balancer
+& ".\bin\minikube.exe" start --driver=docker
 
-## Run
-`mini-balancer` needs to configure the `config.yaml` file, see [config.yaml](https://github.com/wanzo-mini/mini-balancer/blob/main/config.yaml) :
+# Deploy to Kubernetes
+.\deploy_k8s.ps1
 
-and now, you can execute `mini-balancer`, the mini-balancer will print the ascii diagram and configuration details:
-```shell
-> ./mini-balancer
+# Initialize database (CRITICAL: Run this every time you restart Minikube!)
+.\init_k8s_database.ps1
 
-___ _ _  _ _   _ ___  ____ _    ____ _  _ ____ ____ ____ 
- |  | |\ |  \_/  |__] |__| |    |__| |\ | |    |___ |__/ 
- |  | | \|   |   |__] |  | |___ |  | | \| |___ |___ |  \                                        
+# Get service URL (keep this terminal open)
+& ".\bin\minikube.exe" service mini-balancer --url
 
-Schema: http
-Port: 8089
-Health Check: true
-Location:
-        Route: /
-        Proxy Pass: [http://192.168.1.1 http://192.168.1.2:1015 https://192.168.1.2 http://my-server.com]
-        Mode: round-robin
-
-```
-`mini-balancer` will perform `health check` on all proxy sites periodically. When the site is unreachable, it will be removed from the mini-balancer automatically . However, `mini-balancer` will still perform `health check` on unreachable sites. When the site is reachable, it will add it to the mini-balancer automatically.
-
-## API Usage
-`mini-balancer` is also a go library that implements load balancing algorithms, it can be used alone as an API, you need to import it into your project first:
-```shell
-> go get github.com/wanzo-mini/mini-balancer/mini-balancer
+# Start dashboard (new terminal)
+cd dashboard
+npm run dev
 ```
 
-Build the load mini-balancer with `mini-balancer.Build`:
-```go
-hosts := []string{
-	"http://192.168.11.101",
-	"http://192.168.11.102",
-	"http://192.168.11.103",
-	"http://192.168.11.104",
-}
+### Accessing the System
+- **Dashboard**: http://localhost:3000
+- **API**: http://127.0.0.1:[PORT_FROM_MINIKUBE]
 
-lb, err := mini-balancer.Build(mini-balancer.P2Cmini-balancer, hosts)
-if err != nil {
-	return err
-}
-```
-and you can use mini-balancer like this:
-```go
+### Running Queries
+1. Go to http://localhost:3000/query
+2. Enter SQL query (e.g., `SELECT COUNT(*) FROM numbers`)
+3. Click "Run Query"
+4. View results and execution pipeline
 
-clientAddr := "172.160.1.5"  // request IP
-	
-targetHost, err := lb.Balance(clientAddr) 
-if err != nil {
-	log.Fatal(err)
-}
-	
-lb.Inc(targetHost)
-defer lb.Done(targetHost)
+### Viewing System Status
+- **Performance Dashboard**: http://localhost:3000
+- **System Status**: http://localhost:3000/status
+- Shows real-time worker count, CPU, memory metrics
 
-// route to target host
-```
-each load mini-balancer implements the `mini-balancer.mini-balancer` interface:
-```go
-type mini-balancer interface {
-	Add(string)
-	Remove(string)
-	Balance(string) (string, error)
-	Inc(string)
-	Done(string)
-}
-```
-currently supports the following load balancing algorithms:
-```go
-const (
-	IPHashmini-balancer         = "ip-hash"
-	ConsistentHashmini-balancer = "consistent-hash"
-	P2Cmini-balancer            = "p2c"
-	Randommini-balancer         = "random"
-	R2mini-balancer             = "round-robin"
-	LeastLoadmini-balancer      = "least-load"
-	Boundedmini-balancer        = "bounded"
-)
+### Scaling Workers
+```powershell
+# Scale up
+& ".\bin\kubectl.exe" scale deployment worker --replicas=10
+
+# Scale down
+& ".\bin\kubectl.exe" scale deployment worker --replicas=4
 ```
 
+### Stopping the System
+```powershell
+# Stop Minikube
+& ".\bin\minikube.exe" stop
+```
 
-## Contributing
+---
 
-If you are interested in contributing to mini-balancer, please see here: [CONTRIBUTING](https://github.com/wanzo-mini/mini-balancer/blob/main/CONTRIBUTING.md)
+## Architecture Overview
 
-## License
+```
+Client → Mini-Balancer → Dispatcher → Workers (1-10) → PostgreSQL
+                                    ↓
+                                Dashboard (Next.js)
+```
 
-mini-balancer is licensed under the term of the [BSD 2-Clause License](https://github.com/wanzo-mini/mini-balancer/blob/main/LICENSE)
-# Distributed-
+### Components
+- **Mini-Balancer**: Load balancer and API gateway
+- **Dispatcher**: Query parser and task distributor
+- **Workers**: Parallel query executors (auto-scaling)
+- **PostgreSQL**: Database with 100K test rows
+- **Dashboard**: Real-time monitoring UI
+
+### Technology Stack
+- **Backend**: Python (FastAPI), Go
+- **Database**: PostgreSQL
+- **Orchestration**: Kubernetes, Docker
+- **Frontend**: Next.js, React, TypeScript
+- **Monitoring**: Kubernetes metrics, HPA
+
+---
+
+## Key Features
+
+1. **Distributed Query Processing**: Splits queries across multiple workers
+2. **Auto-Scaling**: HPA scales workers based on load (1-10 pods)
+3. **Real-Time Dashboard**: Live monitoring of system health
+4. **Query Visualization**: 4-step execution pipeline
+5. **Production-Ready**: Kubernetes deployment with monitoring
+
+---
+
+## Performance Metrics
+- **Query Speedup**: 4-10x faster than single-threaded
+- **Latency**: 30-50ms for 100K row COUNT queries
+- **Scalability**: 1 to 10 workers dynamically
+- **Database**: 100,000 test rows

@@ -1,0 +1,985 @@
+
+================================================================================
+                DISTRIBUTED QUERY PROCESSING - PRESENTATION DEMO                
+================================================================================
+
+Timestamp: 2025-11-28 19:41:21
+API Endpoint: http://127.0.0.1:55290/query
+
+================================================================================
+                          DEMO 1: DEPARTMENT ANALYTICS                          
+================================================================================
+
+
+--------------------------------------------------------------------------------
+Query: Count employees by department
+--------------------------------------------------------------------------------
+SQL: SELECT d.dept_name, COUNT(e.emp_id) as employee_count FROM departments d LEFT JOIN employees e ON d.dept_id = e.dept_id GROUP BY d.dept_name ORDER BY employee_count DESC
+
+[SUCCESS] Status: 200 | Rows: 5 | Time: 0.029s
+
+Results:
+[
+  {
+    "dept_name": "Marketing",
+    "employee_count": 200
+  },
+  {
+    "dept_name": "Finance",
+    "employee_count": 200
+  },
+  {
+    "dept_name": "Engineering",
+    "employee_count": 200
+  },
+  {
+    "dept_name": "Sales",
+    "employee_count": 200
+  },
+  {
+    "dept_name": "HR",
+    "employee_count": 200
+  }
+]
+
+--------------------------------------------------------------------------------
+Query: Average salary by department
+--------------------------------------------------------------------------------
+SQL: SELECT d.dept_name, COUNT(e.emp_id) as emp_count FROM departments d JOIN employees e ON d.dept_id = e.dept_id GROUP BY d.dept_name ORDER BY emp_count DESC
+
+[SUCCESS] Status: 200 | Rows: 5 | Time: 0.021s
+
+Results:
+[
+  {
+    "dept_name": "Marketing",
+    "emp_count": 200
+  },
+  {
+    "dept_name": "Finance",
+    "emp_count": 200
+  },
+  {
+    "dept_name": "Engineering",
+    "emp_count": 200
+  },
+  {
+    "dept_name": "Sales",
+    "emp_count": 200
+  },
+  {
+    "dept_name": "HR",
+    "emp_count": 200
+  }
+]
+
+================================================================================
+                           DEMO 2: EMPLOYEE ANALYTICS                           
+================================================================================
+
+
+--------------------------------------------------------------------------------
+Query: Top 10 highest paid employees
+--------------------------------------------------------------------------------
+SQL: SELECT emp_name, job_title, salary FROM employees ORDER BY salary DESC LIMIT 10
+
+[SUCCESS] Status: 200 | Rows: 10 | Time: 0.020s
+
+Results:
+[
+  {
+    "emp_name": "Employee_592",
+    "job_title": "Engineer",
+    "salary": 149777.0
+  },
+  {
+    "emp_name": "Employee_994",
+    "job_title": "Marketing Specialist",
+    "salary": 149764.0
+  },
+  {
+    "emp_name": "Employee_245",
+    "job_title": "Analyst",
+    "salary": 149621.0
+  },
+  {
+    "emp_name": "Employee_20",
+    "job_title": "Manager",
+    "salary": 149603.0
+  },
+  {
+    "emp_name": "Employee_184",
+    "job_title": "Marketing Specialist",
+    "salary": 149554.0
+  },
+  {
+    "emp_name": "Employee_85",
+    "job_title": "Analyst",
+    "salary": 149302.0
+  },
+  {
+    "emp_name": "Employee_5",
+    "job_title": "Analyst",
+    "salary": 149221.0
+  },
+  {
+    "emp_name": "Employee_186",
+    "job_title": "Coordinator",
+    "salary": 149076.0
+  },
+  {
+    "emp_name": "Employee_818",
+    "job_title": "Associate",
+    "salary": 149040.0
+  },
+  {
+    "emp_name": "Employee_402",
+    "job_title": "Engineer",
+    "salary": 148902.0
+  }
+]
+
+--------------------------------------------------------------------------------
+Query: Employee count by job title
+--------------------------------------------------------------------------------
+SQL: SELECT job_title, COUNT(*) as count FROM employees GROUP BY job_title ORDER BY count DESC
+
+[SUCCESS] Status: 200 | Rows: 10 | Time: 0.017s
+
+Results:
+[
+  {
+    "job_title": "Engineer",
+    "count": 100
+  },
+  {
+    "job_title": "Senior Engineer",
+    "count": 100
+  },
+  {
+    "job_title": "Manager",
+    "count": 100
+  },
+  {
+    "job_title": "Specialist",
+    "count": 100
+  },
+  {
+    "job_title": "Analyst",
+    "count": 100
+  },
+  {
+    "job_title": "Associate",
+    "count": 100
+  },
+  {
+    "job_title": "Marketing Specialist",
+    "count": 100
+  },
+  {
+    "job_title": "Consultant",
+    "count": 100
+  },
+  {
+    "job_title": "Coordinator",
+    "count": 100
+  },
+  {
+    "job_title": "Sales Representative",
+    "count": 100
+  }
+]
+
+--------------------------------------------------------------------------------
+Query: Managers with their info
+--------------------------------------------------------------------------------
+SQL: SELECT emp_name, email, job_title, salary FROM employees WHERE job_title = 'Manager' ORDER BY salary DESC
+
+[SUCCESS] Status: 200 | Rows: 100 | Time: 0.025s
+
+Results:
+[
+  {
+    "email": "emp20@company.com",
+    "emp_name": "Employee_20",
+    "job_title": "Manager",
+    "salary": 149603.0
+  },
+  {
+    "email": "emp700@company.com",
+    "emp_name": "Employee_700",
+    "job_title": "Manager",
+    "salary": 147693.0
+  },
+  {
+    "email": "emp60@company.com",
+    "emp_name": "Employee_60",
+    "job_title": "Manager",
+    "salary": 145430.0
+  },
+  {
+    "email": "emp340@company.com",
+    "emp_name": "Employee_340",
+    "job_title": "Manager",
+    "salary": 145135.0
+  },
+  {
+    "email": "emp770@company.com",
+    "emp_name": "Employee_770",
+    "job_title": "Manager",
+    "salary": 143829.0
+  },
+  {
+    "email": "emp460@company.com",
+    "emp_name": "Employee_460",
+    "job_title": "Manager",
+    "salary": 143701.0
+  },
+  {
+    "email": "emp140@company.com",
+    "emp_name": "Employee_140",
+    "job_title": "Manager",
+    "salary": 142751.0
+  },
+  {
+    "email": "emp610@company.com",
+    "emp_name": "Employee_610",
+    "job_title": "Manager",
+    "salary": 140659.0
+  },
+  {
+    "email": "emp750@company.com",
+    "emp_name": "Employee_750",
+    "job_title": "Manager",
+    "salary": 140244.0
+  },
+  {
+    "email": "emp510@company.com",
+    "emp_name": "Employee_510",
+    "job_title": "Manager",
+    "salary": 137360.0
+  },
+  {
+    "email": "emp900@company.com",
+    "emp_name": "Employee_900",
+    "job_title": "Manager",
+    "salary": 136935.0
+  },
+  {
+    "email": "emp170@company.com",
+    "emp_name": "Employee_170",
+    "job_title": "Manager",
+    "salary": 134562.0
+  },
+  {
+    "email": "emp110@company.com",
+    "emp_name": "Employee_110",
+    "job_title": "Manager",
+    "salary": 130451.0
+  },
+  {
+    "email": "emp720@company.com",
+    "emp_name": "Employee_720",
+    "job_title": "Manager",
+    "salary": 126690.0
+  },
+  {
+    "email": "emp650@company.com",
+    "emp_name": "Employee_650",
+    "job_title": "Manager",
+    "salary": 126013.0
+  },
+  {
+    "email": "emp80@company.com",
+    "emp_name": "Employee_80",
+    "job_title": "Manager",
+    "salary": 124479.0
+  },
+  {
+    "email": "emp600@company.com",
+    "emp_name": "Employee_600",
+    "job_title": "Manager",
+    "salary": 123730.0
+  },
+  {
+    "email": "emp200@company.com",
+    "emp_name": "Employee_200",
+    "job_title": "Manager",
+    "salary": 120466.0
+  },
+  {
+    "email": "emp320@company.com",
+    "emp_name": "Employee_320",
+    "job_title": "Manager",
+    "salary": 119557.0
+  },
+  {
+    "email": "emp950@company.com",
+    "emp_name": "Employee_950",
+    "job_title": "Manager",
+    "salary": 118692.0
+  },
+  {
+    "email": "emp620@company.com",
+    "emp_name": "Employee_620",
+    "job_title": "Manager",
+    "salary": 111423.0
+  },
+  {
+    "email": "emp850@company.com",
+    "emp_name": "Employee_850",
+    "job_title": "Manager",
+    "salary": 111101.0
+  },
+  {
+    "email": "emp300@company.com",
+    "emp_name": "Employee_300",
+    "job_title": "Manager",
+    "salary": 107607.0
+  },
+  {
+    "email": "emp150@company.com",
+    "emp_name": "Employee_150",
+    "job_title": "Manager",
+    "salary": 106513.0
+  },
+  {
+    "email": "emp190@company.com",
+    "emp_name": "Employee_190",
+    "job_title": "Manager",
+    "salary": 102385.0
+  },
+  {
+    "email": "emp660@company.com",
+    "emp_name": "Employee_660",
+    "job_title": "Manager",
+    "salary": 101679.0
+  },
+  {
+    "email": "emp780@company.com",
+    "emp_name": "Employee_780",
+    "job_title": "Manager",
+    "salary": 101071.0
+  },
+  {
+    "email": "emp970@company.com",
+    "emp_name": "Employee_970",
+    "job_title": "Manager",
+    "salary": 99924.0
+  },
+  {
+    "email": "emp870@company.com",
+    "emp_name": "Employee_870",
+    "job_title": "Manager",
+    "salary": 96836.0
+  },
+  {
+    "email": "emp240@company.com",
+    "emp_name": "Employee_240",
+    "job_title": "Manager",
+    "salary": 94625.0
+  },
+  {
+    "email": "emp690@company.com",
+    "emp_name": "Employee_690",
+    "job_title": "Manager",
+    "salary": 94201.0
+  },
+  {
+    "email": "emp830@company.com",
+    "emp_name": "Employee_830",
+    "job_title": "Manager",
+    "salary": 93175.0
+  },
+  {
+    "email": "emp760@company.com",
+    "emp_name": "Employee_760",
+    "job_title": "Manager",
+    "salary": 91134.0
+  },
+  {
+    "email": "emp410@company.com",
+    "emp_name": "Employee_410",
+    "job_title": "Manager",
+    "salary": 90422.0
+  },
+  {
+    "email": "emp450@company.com",
+    "emp_name": "Employee_450",
+    "job_title": "Manager",
+    "salary": 90253.0
+  },
+  {
+    "email": "emp820@company.com",
+    "emp_name": "Employee_820",
+    "job_title": "Manager",
+    "salary": 90114.0
+  },
+  {
+    "email": "emp100@company.com",
+    "emp_name": "Employee_100",
+    "job_title": "Manager",
+    "salary": 87770.0
+  },
+  {
+    "email": "emp540@company.com",
+    "emp_name": "Employee_540",
+    "job_title": "Manager",
+    "salary": 87089.0
+  },
+  {
+    "email": "emp220@company.com",
+    "emp_name": "Employee_220",
+    "job_title": "Manager",
+    "salary": 86236.0
+  },
+  {
+    "email": "emp590@company.com",
+    "emp_name": "Employee_590",
+    "job_title": "Manager",
+    "salary": 85035.0
+  },
+  {
+    "email": "emp260@company.com",
+    "emp_name": "Employee_260",
+    "job_title": "Manager",
+    "salary": 84374.0
+  },
+  {
+    "email": "emp920@company.com",
+    "emp_name": "Employee_920",
+    "job_title": "Manager",
+    "salary": 84276.0
+  },
+  {
+    "email": "emp550@company.com",
+    "emp_name": "Employee_550",
+    "job_title": "Manager",
+    "salary": 84038.0
+  },
+  {
+    "email": "emp490@company.com",
+    "emp_name": "Employee_490",
+    "job_title": "Manager",
+    "salary": 83852.0
+  },
+  {
+    "email": "emp380@company.com",
+    "emp_name": "Employee_380",
+    "job_title": "Manager",
+    "salary": 83512.0
+  },
+  {
+    "email": "emp470@company.com",
+    "emp_name": "Employee_470",
+    "job_title": "Manager",
+    "salary": 82480.0
+  },
+  {
+    "email": "emp290@company.com",
+    "emp_name": "Employee_290",
+    "job_title": "Manager",
+    "salary": 81710.0
+  },
+  {
+    "email": "emp990@company.com",
+    "emp_name": "Employee_990",
+    "job_title": "Manager",
+    "salary": 80127.0
+  },
+  {
+    "email": "emp680@company.com",
+    "emp_name": "Employee_680",
+    "job_title": "Manager",
+    "salary": 79922.0
+  },
+  {
+    "email": "emp890@company.com",
+    "emp_name": "Employee_890",
+    "job_title": "Manager",
+    "salary": 79612.0
+  },
+  {
+    "email": "emp50@company.com",
+    "emp_name": "Employee_50",
+    "job_title": "Manager",
+    "salary": 79439.0
+  },
+  {
+    "email": "emp860@company.com",
+    "emp_name": "Employee_860",
+    "job_title": "Manager",
+    "salary": 79162.0
+  },
+  {
+    "email": "emp930@company.com",
+    "emp_name": "Employee_930",
+    "job_title": "Manager",
+    "salary": 76746.0
+  },
+  {
+    "email": "emp30@company.com",
+    "emp_name": "Employee_30",
+    "job_title": "Manager",
+    "salary": 76539.0
+  },
+  {
+    "email": "emp70@company.com",
+    "emp_name": "Employee_70",
+    "job_title": "Manager",
+    "salary": 74709.0
+  },
+  {
+    "email": "emp310@company.com",
+    "emp_name": "Employee_310",
+    "job_title": "Manager",
+    "salary": 74094.0
+  },
+  {
+    "email": "emp640@company.com",
+    "emp_name": "Employee_640",
+    "job_title": "Manager",
+    "salary": 72637.0
+  },
+  {
+    "email": "emp730@company.com",
+    "emp_name": "Employee_730",
+    "job_title": "Manager",
+    "salary": 72306.0
+  },
+  {
+    "email": "emp500@company.com",
+    "emp_name": "Employee_500",
+    "job_title": "Manager",
+    "salary": 72173.0
+  },
+  {
+    "email": "emp710@company.com",
+    "emp_name": "Employee_710",
+    "job_title": "Manager",
+    "salary": 70596.0
+  },
+  {
+    "email": "emp560@company.com",
+    "emp_name": "Employee_560",
+    "job_title": "Manager",
+    "salary": 69041.0
+  },
+  {
+    "email": "emp370@company.com",
+    "emp_name": "Employee_370",
+    "job_title": "Manager",
+    "salary": 68994.0
+  },
+  {
+    "email": "emp810@company.com",
+    "emp_name": "Employee_810",
+    "job_title": "Manager",
+    "salary": 68659.0
+  },
+  {
+    "email": "emp330@company.com",
+    "emp_name": "Employee_330",
+    "job_title": "Manager",
+    "salary": 67255.0
+  },
+  {
+    "email": "emp130@company.com",
+    "emp_name": "Employee_130",
+    "job_title": "Manager",
+    "salary": 64668.0
+  },
+  {
+    "email": "emp520@company.com",
+    "emp_name": "Employee_520",
+    "job_title": "Manager",
+    "salary": 63994.0
+  },
+  {
+    "email": "emp120@company.com",
+    "emp_name": "Employee_120",
+    "job_title": "Manager",
+    "salary": 63851.0
+  },
+  {
+    "email": "emp430@company.com",
+    "emp_name": "Employee_430",
+    "job_title": "Manager",
+    "salary": 62647.0
+  },
+  {
+    "email": "emp740@company.com",
+    "emp_name": "Employee_740",
+    "job_title": "Manager",
+    "salary": 60943.0
+  },
+  {
+    "email": "emp980@company.com",
+    "emp_name": "Employee_980",
+    "job_title": "Manager",
+    "salary": 60931.0
+  },
+  {
+    "email": "emp440@company.com",
+    "emp_name": "Employee_440",
+    "job_title": "Manager",
+    "salary": 59931.0
+  },
+  {
+    "email": "emp270@company.com",
+    "emp_name": "Employee_270",
+    "job_title": "Manager",
+    "salary": 58662.0
+  },
+  {
+    "email": "emp960@company.com",
+    "emp_name": "Employee_960",
+    "job_title": "Manager",
+    "salary": 57213.0
+  },
+  {
+    "email": "emp940@company.com",
+    "emp_name": "Employee_940",
+    "job_title": "Manager",
+    "salary": 57075.0
+  },
+  {
+    "email": "emp390@company.com",
+    "emp_name": "Employee_390",
+    "job_title": "Manager",
+    "salary": 56518.0
+  },
+  {
+    "email": "emp570@company.com",
+    "emp_name": "Employee_570",
+    "job_title": "Manager",
+    "salary": 55613.0
+  },
+  {
+    "email": "emp420@company.com",
+    "emp_name": "Employee_420",
+    "job_title": "Manager",
+    "salary": 53947.0
+  },
+  {
+    "email": "emp230@company.com",
+    "emp_name": "Employee_230",
+    "job_title": "Manager",
+    "salary": 53061.0
+  },
+  {
+    "email": "emp530@company.com",
+    "emp_name": "Employee_530",
+    "job_title": "Manager",
+    "salary": 51573.0
+  },
+  {
+    "email": "emp1000@company.com",
+    "emp_name": "Employee_1000",
+    "job_title": "Manager",
+    "salary": 50430.0
+  },
+  {
+    "email": "emp40@company.com",
+    "emp_name": "Employee_40",
+    "job_title": "Manager",
+    "salary": 49680.0
+  },
+  {
+    "email": "emp180@company.com",
+    "emp_name": "Employee_180",
+    "job_title": "Manager",
+    "salary": 48410.0
+  },
+  {
+    "email": "emp630@company.com",
+    "emp_name": "Employee_630",
+    "job_title": "Manager",
+    "salary": 47777.0
+  },
+  {
+    "email": "emp580@company.com",
+    "emp_name": "Employee_580",
+    "job_title": "Manager",
+    "salary": 47728.0
+  },
+  {
+    "email": "emp840@company.com",
+    "emp_name": "Employee_840",
+    "job_title": "Manager",
+    "salary": 45108.0
+  },
+  {
+    "email": "emp350@company.com",
+    "emp_name": "Employee_350",
+    "job_title": "Manager",
+    "salary": 44675.0
+  },
+  {
+    "email": "emp910@company.com",
+    "emp_name": "Employee_910",
+    "job_title": "Manager",
+    "salary": 42086.0
+  },
+  {
+    "email": "emp360@company.com",
+    "emp_name": "Employee_360",
+    "job_title": "Manager",
+    "salary": 40240.0
+  },
+  {
+    "email": "emp210@company.com",
+    "emp_name": "Employee_210",
+    "job_title": "Manager",
+    "salary": 39126.0
+  },
+  {
+    "email": "emp480@company.com",
+    "emp_name": "Employee_480",
+    "job_title": "Manager",
+    "salary": 38117.0
+  },
+  {
+    "email": "emp90@company.com",
+    "emp_name": "Employee_90",
+    "job_title": "Manager",
+    "salary": 37591.0
+  },
+  {
+    "email": "emp670@company.com",
+    "emp_name": "Employee_670",
+    "job_title": "Manager",
+    "salary": 37539.0
+  },
+  {
+    "email": "emp250@company.com",
+    "emp_name": "Employee_250",
+    "job_title": "Manager",
+    "salary": 36922.0
+  },
+  {
+    "email": "emp280@company.com",
+    "emp_name": "Employee_280",
+    "job_title": "Manager",
+    "salary": 36749.0
+  },
+  {
+    "email": "emp10@company.com",
+    "emp_name": "Employee_10",
+    "job_title": "Manager",
+    "salary": 36280.0
+  },
+  {
+    "email": "emp160@company.com",
+    "emp_name": "Employee_160",
+    "job_title": "Manager",
+    "salary": 35248.0
+  },
+  {
+    "email": "emp800@company.com",
+    "emp_name": "Employee_800",
+    "job_title": "Manager",
+    "salary": 33569.0
+  },
+  {
+    "email": "emp880@company.com",
+    "emp_name": "Employee_880",
+    "job_title": "Manager",
+    "salary": 33159.0
+  },
+  {
+    "email": "emp790@company.com",
+    "emp_name": "Employee_790",
+    "job_title": "Manager",
+    "salary": 32989.0
+  },
+  {
+    "email": "emp400@company.com",
+    "emp_name": "Employee_400",
+    "job_title": "Manager",
+    "salary": 32646.0
+  }
+]
+
+================================================================================
+                       DEMO 3: SALES & PRODUCT ANALYTICS                        
+================================================================================
+
+
+--------------------------------------------------------------------------------
+Query: Product sales by category
+--------------------------------------------------------------------------------
+SQL: SELECT p.category, COUNT(DISTINCT oi.order_id) as order_count, SUM(oi.quantity) as total_quantity FROM products p JOIN order_items oi ON p.product_id = oi.product_id GROUP BY p.category ORDER BY total_quantity DESC
+
+[SUCCESS] Status: 200 | Rows: 5 | Time: 0.030s
+
+Results:
+[
+  {
+    "category": "Food",
+    "total_quantity": 18181,
+    "order_count": 2265
+  },
+  {
+    "category": "Home & Garden",
+    "total_quantity": 18092,
+    "order_count": 2319
+  },
+  {
+    "category": "Electronics",
+    "total_quantity": 18072,
+    "order_count": 2234
+  },
+  {
+    "category": "Clothing",
+    "total_quantity": 18029,
+    "order_count": 2242
+  },
+  {
+    "category": "Books",
+    "total_quantity": 17575,
+    "order_count": 2212
+  }
+]
+
+--------------------------------------------------------------------------------
+Query: Order status distribution
+--------------------------------------------------------------------------------
+SQL: SELECT status, COUNT(*) as order_count FROM orders GROUP BY status ORDER BY order_count DESC
+
+[SUCCESS] Status: 200 | Rows: 3 | Time: 0.021s
+
+Results:
+[
+  {
+    "status": "Shipped",
+    "order_count": 2476
+  },
+  {
+    "status": "Completed",
+    "order_count": 1696
+  },
+  {
+    "status": "Pending",
+    "order_count": 828
+  }
+]
+
+--------------------------------------------------------------------------------
+Query: High-value orders (>5000)
+--------------------------------------------------------------------------------
+SQL: SELECT o.order_id, o.total_amount, o.status FROM orders o WHERE o.total_amount > 5000 ORDER BY o.total_amount DESC LIMIT 20
+
+[SUCCESS] Status: 200 | Rows: 20 | Time: 0.026s
+
+Sample Results (first 5 of 20):
+[
+  {
+    "order_id": 1579,
+    "status": "Shipped",
+    "total_amount": 9998.59
+  },
+  {
+    "order_id": 4090,
+    "status": "Shipped",
+    "total_amount": 9997.78
+  },
+  {
+    "order_id": 2451,
+    "status": "Shipped",
+    "total_amount": 9994.64
+  },
+  {
+    "order_id": 4769,
+    "status": "Completed",
+    "total_amount": 9993.8
+  },
+  {
+    "order_id": 3406,
+    "status": "Completed",
+    "total_amount": 9992.16
+  }
+]
+  ... and 15 more rows
+
+================================================================================
+                     DEMO 4: COMPLEX ANALYTICS WITH HAVING                      
+================================================================================
+
+
+--------------------------------------------------------------------------------
+Query: Employees with more than 3 orders
+--------------------------------------------------------------------------------
+SQL: SELECT e.emp_name, COUNT(o.order_id) as order_count FROM employees e JOIN orders o ON e.emp_id = o.emp_id GROUP BY e.emp_name HAVING COUNT(o.order_id) > 3 ORDER BY order_count DESC LIMIT 15
+
+[SUCCESS] Status: 200 | Rows: 15 | Time: 0.022s
+
+Sample Results (first 5 of 15):
+[
+  {
+    "emp_name": "Employee_173",
+    "order_count": 14
+  },
+  {
+    "emp_name": "Employee_638",
+    "order_count": 13
+  },
+  {
+    "emp_name": "Employee_700",
+    "order_count": 13
+  },
+  {
+    "emp_name": "Employee_689",
+    "order_count": 12
+  },
+  {
+    "emp_name": "Employee_807",
+    "order_count": 12
+  }
+]
+  ... and 10 more rows
+
+--------------------------------------------------------------------------------
+Query: Department order performance
+--------------------------------------------------------------------------------
+SQL: SELECT d.dept_name, COUNT(DISTINCT o.order_id) as total_orders FROM departments d JOIN employees e ON d.dept_id = e.dept_id JOIN orders o ON e.emp_id = o.emp_id GROUP BY d.dept_name ORDER BY total_orders DESC
+
+[SUCCESS] Status: 200 | Rows: 5 | Time: 0.023s
+
+Results:
+[
+  {
+    "dept_name": "Finance",
+    "total_orders": 1028
+  },
+  {
+    "dept_name": "Sales",
+    "total_orders": 1026
+  },
+  {
+    "dept_name": "HR",
+    "total_orders": 1010
+  },
+  {
+    "dept_name": "Marketing",
+    "total_orders": 994
+  },
+  {
+    "dept_name": "Engineering",
+    "total_orders": 942
+  }
+]
+
+================================================================================
+                               EXECUTION SUMMARY                                
+================================================================================
+
+Total Queries Executed: 10
+Successful Queries: 10
+Success Rate: 100.0%
+Total Execution Time: 0.235s
+Average Query Time: 0.024s
+Total Rows Processed: 178
+
+Demo completed successfully!
+

@@ -1,0 +1,5 @@
+Testing: SELECT (id % 10) as m, COUNT(*) as c FROM numbers GROUP BY m HAVING c > 5000
+Status: 200
+Response: {
+  "rows": []
+}

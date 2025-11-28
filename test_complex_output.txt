@@ -1,0 +1,152 @@
+
+======================================================================
+COMPLEX QUERY PROCESSING TEST SUITE
+======================================================================
+
+======================================================================
+Test: Simple WHERE clause
+SQL: SELECT COUNT(*) FROM numbers WHERE id <= 50000
+======================================================================
+[OK] Status: 200
+[OK] Rows returned: 1
+[OK] Expected row count: PASS
+[OK] Results:
+[
+  {
+    "result": 50000
+  }
+]
+
+======================================================================
+Test: WHERE with AND condition
+SQL: SELECT COUNT(*) FROM numbers WHERE id > 1000 AND id <= 2000
+======================================================================
+[OK] Status: 200
+[OK] Rows returned: 1
+[OK] Expected row count: PASS
+[OK] Results:
+[
+  {
+    "result": 1000
+  }
+]
+
+======================================================================
+Test: GROUP BY without HAVING
+SQL: SELECT (id % 10) as digit, COUNT(*) as count FROM numbers GROUP BY digit
+======================================================================
+[OK] Status: 200
+[OK] Rows returned: 10
+[OK] Expected row count: PASS
+[OK] Sample results (first 3):
+[
+  {
+    "digit": 2,
+    "count": 10000
+  },
+  {
+    "digit": 5,
+    "count": 10000
+  },
+  {
+    "digit": 9,
+    "count": 10000
+  }
+]
+
+======================================================================
+Test: GROUP BY with HAVING (filter to 0 rows)
+SQL: SELECT (id % 10) as digit, COUNT(*) as count FROM numbers GROUP BY digit HAVING count > 15000
+======================================================================
+[OK] Status: 200
+[OK] Rows returned: 0
+[OK] Expected row count: PASS
+[OK] Results:
+[]
+
+======================================================================
+Test: GROUP BY with HAVING (keep all rows)
+SQL: SELECT (id % 10) as digit, COUNT(*) as count FROM numbers GROUP BY digit HAVING count > 5000
+======================================================================
+[OK] Status: 200
+[OK] Rows returned: 10
+[OK] Expected row count: PASS
+[OK] Sample results (first 3):
+[
+  {
+    "digit": 2,
+    "count": 10000
+  },
+  {
+    "digit": 5,
+    "count": 10000
+  },
+  {
+    "digit": 9,
+    "count": 10000
+  }
+]
+
+======================================================================
+Test: WHERE + GROUP BY + HAVING (complex)
+SQL: SELECT (id % 10) as digit, COUNT(*) as count FROM numbers WHERE id < 50000 GROUP BY digit HAVING count > 2000
+======================================================================
+[OK] Status: 200
+[OK] Rows returned: 10
+[OK] Expected row count: PASS
+[OK] Sample results (first 3):
+[
+  {
+    "digit": 6,
+    "count": 5000
+  },
+  {
+    "digit": 7,
+    "count": 5000
+  },
+  {
+    "digit": 2,
+    "count": 5000
+  }
+]
+
+======================================================================
+Test: WHERE + GROUP BY + HAVING (strict)
+SQL: SELECT (id % 10) as digit, COUNT(*) as count FROM numbers WHERE id < 50000 GROUP BY digit HAVING count >= 5000
+======================================================================
+[OK] Status: 200
+[OK] Rows returned: 9
+[OK] Expected row count: PASS
+[OK] Sample results (first 3):
+[
+  {
+    "digit": 6,
+    "count": 5000
+  },
+  {
+    "digit": 7,
+    "count": 5000
+  },
+  {
+    "digit": 2,
+    "count": 5000
+  }
+]
+
+======================================================================
+Test: SUM aggregation
+SQL: SELECT SUM(id) as total FROM numbers WHERE id <= 100
+======================================================================
+[OK] Status: 200
+[OK] Rows returned: 1
+[OK] Expected row count: PASS
+[OK] Results:
+[
+  {
+    "result": 5050
+  }
+]
+
+======================================================================
+TEST SUITE COMPLETE
+======================================================================

@@ -1,0 +1,73 @@
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+Database pool created: postgres://user:pw@postgres:5432/demo
+DEBUG dispatch: is_agg=True, agg_type=count, group_by=['m'], having=False
+DEBUG dispatch: can_split=False
+DEBUG dispatch: Generated 1 subqueries
+DEBUG: Worker returned 10 rows
+INFO:     10.244.0.132:39644 - "POST /query HTTP/1.1" 200 OK
+DEBUG dispatch: is_agg=True, agg_type=count, group_by=['m'], having=True
+DEBUG dispatch: can_split=False
+DEBUG dispatch: Removing HAVING from non-split query
+DEBUG dispatch: Generated 1 subqueries
+DEBUG: Worker returned 10 rows
+DEBUG dispatch: Applying HAVING filter to 10 rows
+DEBUG dispatch: HAVING node type: <class 'sqlglot.expressions.Having'>
+DEBUG dispatch: HAVING node: HAVING c > 99999
+DEBUG dispatch: Sample row: {'m': 2, 'c': 10000}
+DEBUG dispatch: Row {'m': 2, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 5, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 9, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 4, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 0, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 6, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 7, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 1, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 8, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 3, 'c': 10000} -> passes=False
+DEBUG dispatch: After HAVING filter: 0 rows
+INFO:     10.244.0.132:39644 - "POST /query HTTP/1.1" 200 OK
+DEBUG dispatch: is_agg=True, agg_type=count, group_by=['m'], having=True
+DEBUG dispatch: can_split=False
+DEBUG dispatch: Removing HAVING from non-split query
+DEBUG dispatch: Generated 1 subqueries
+DEBUG: Worker returned 10 rows
+DEBUG dispatch: Applying HAVING filter to 10 rows
+DEBUG dispatch: HAVING node type: <class 'sqlglot.expressions.Having'>
+DEBUG dispatch: HAVING node: HAVING c > 5000
+DEBUG dispatch: Sample row: {'m': 2, 'c': 10000}
+DEBUG dispatch: Row {'m': 2, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 5, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 9, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 4, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 0, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 6, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 7, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 1, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 8, 'c': 10000} -> passes=False
+DEBUG dispatch: Row {'m': 3, 'c': 10000} -> passes=False
+DEBUG dispatch: After HAVING filter: 0 rows
+INFO:     10.244.0.132:39644 - "POST /query HTTP/1.1" 200 OK
+DEBUG dispatch: is_agg=True, agg_type=count, group_by=['m'], having=True
+DEBUG dispatch: can_split=False
+DEBUG dispatch: Removing HAVING from non-split query
+DEBUG dispatch: Generated 1 subqueries
+DEBUG: Worker returned 10 rows
+DEBUG dispatch: Applying HAVING filter to 10 rows
+DEBUG dispatch: HAVING node type: <class 'sqlglot.expressions.Having'>
+DEBUG dispatch: HAVING node: HAVING c > 2000
+DEBUG dispatch: Sample row: {'m': 6, 'c': 5000}
+DEBUG dispatch: Row {'m': 6, 'c': 5000} -> passes=False
+DEBUG dispatch: Row {'m': 7, 'c': 5000} -> passes=False
+DEBUG dispatch: Row {'m': 2, 'c': 5000} -> passes=False
+DEBUG dispatch: Row {'m': 1, 'c': 5000} -> passes=False
+DEBUG dispatch: Row {'m': 8, 'c': 5000} -> passes=False
+DEBUG dispatch: Row {'m': 5, 'c': 5000} -> passes=False
+DEBUG dispatch: Row {'m': 9, 'c': 5000} -> passes=False
+DEBUG dispatch: Row {'m': 4, 'c': 5000} -> passes=False
+DEBUG dispatch: Row {'m': 0, 'c': 4999} -> passes=False
+DEBUG dispatch: Row {'m': 3, 'c': 5000} -> passes=False
+DEBUG dispatch: After HAVING filter: 0 rows
+INFO:     10.244.0.132:39644 - "POST /query HTTP/1.1" 200 OK

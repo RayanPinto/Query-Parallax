@@ -1,0 +1,150 @@
+--- Test 1: GROUP BY ---
+Executing: SELECT (id % 10) as m, COUNT(*) as c FROM numbers GROUP BY m
+Result:
+{
+  "rows": [
+    {
+      "m": 2,
+      "c": 10000
+    },
+    {
+      "m": 5,
+      "c": 10000
+    },
+    {
+      "m": 9,
+      "c": 10000
+    },
+    {
+      "m": 4,
+      "c": 10000
+    },
+    {
+      "m": 0,
+      "c": 10000
+    },
+    {
+      "m": 6,
+      "c": 10000
+    },
+    {
+      "m": 7,
+      "c": 10000
+    },
+    {
+      "m": 1,
+      "c": 10000
+    },
+    {
+      "m": 8,
+      "c": 10000
+    },
+    {
+      "m": 3,
+      "c": 10000
+    }
+  ]
+}
+
+--- Test 2: GROUP BY + HAVING (Filter All) ---
+Executing: SELECT (id % 10) as m, COUNT(*) as c FROM numbers GROUP BY m HAVING c > 99999
+Result:
+{
+  "rows": []
+}
+
+--- Test 3: GROUP BY + HAVING (Filter None) ---
+Executing: SELECT (id % 10) as m, COUNT(*) as c FROM numbers GROUP BY m HAVING c > 5000
+Result:
+{
+  "rows": [
+    {
+      "m": 2,
+      "c": 10000
+    },
+    {
+      "m": 5,
+      "c": 10000
+    },
+    {
+      "m": 9,
+      "c": 10000
+    },
+    {
+      "m": 4,
+      "c": 10000
+    },
+    {
+      "m": 0,
+      "c": 10000
+    },
+    {
+      "m": 6,
+      "c": 10000
+    },
+    {
+      "m": 7,
+      "c": 10000
+    },
+    {
+      "m": 1,
+      "c": 10000
+    },
+    {
+      "m": 8,
+      "c": 10000
+    },
+    {
+      "m": 3,
+      "c": 10000
+    }
+  ]
+}
+
+--- Test 4: WHERE + GROUP BY + HAVING ---
+Executing: SELECT (id % 10) as m, COUNT(*) as c FROM numbers WHERE id < 50000 GROUP BY m HAVING c > 2000
+Result:
+{
+  "rows": [
+    {
+      "m": 6,
+      "c": 5000
+    },
+    {
+      "m": 7,
+      "c": 5000
+    },
+    {
+      "m": 2,
+      "c": 5000
+    },
+    {
+      "m": 1,
+      "c": 5000
+    },
+    {
+      "m": 8,
+      "c": 5000
+    },
+    {
+      "m": 5,
+      "c": 5000
+    },
+    {
+      "m": 9,
+      "c": 5000
+    },
+    {
+      "m": 4,
+      "c": 5000
+    },
+    {
+      "m": 0,
+      "c": 4999
+    },
+    {
+      "m": 3,
+      "c": 5000
+    }
+  ]
+}
