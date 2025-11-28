@@ -6,6 +6,7 @@ import { BarChart3, Activity, Server, Zap } from "lucide-react";
 
 const navItems = [
   { name: "Dashboard", href: "/", icon: BarChart3 },
+  { name: "Analytics", href: "/analytics", icon: Activity },
   { name: "Query Execution", href: "/query", icon: Zap },
   { name: "System Status", href: "/status", icon: Server },
 ];

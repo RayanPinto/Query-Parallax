@@ -48,9 +48,11 @@ export default function DashboardPage() {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('storage', loadMetrics);
     
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('storage', loadMetrics);
     };
   }, []);
 

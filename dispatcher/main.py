@@ -16,6 +16,7 @@ DYNAMIC_SPLITS = Counter("dispatcher_dynamic_splits_total", "Queries split dynam
 QUERY_LATENCY = Histogram("dispatcher_query_duration_seconds", "Query latency", ["query_type"])
 WORKER_REQUESTS = Counter("dispatcher_worker_requests_total", "Total requests sent to workers")
 ACTIVE_QUERIES = Gauge("dispatcher_active_queries", "Currently processing queries")
+GROUP_BY_QUERIES = Counter("dispatcher_group_by_queries_total", "Queries with GROUP BY")
 
 # Where workers live (Docker‑Compose service name)
 WORKER_URL = os.getenv("WORKER_URL", "http://worker-svc:8001/execute")
@@ -65,10 +66,16 @@ def can_split(parsed):
 async def make_subqueries(sql, n_parts=MAX_PARTS):
     """Intelligent range partition using dynamic database bounds."""
     parsed = parse_one(sql)
+    
+    # Remove HAVING clause from subqueries (it must be applied globally after merge)
+    if parsed.args.get("having"):
+        print(f"DEBUG: Removing HAVING clause from worker queries")
+        parsed.set("having", None)
+        
     table_name = extract_table_name(parsed)
     
     if not table_name:
-        return [sql]
+        return [parsed.sql()]
     
     # Try to extract explicit bounds from WHERE clause first
     where = parsed.args.get("where")
@@ -88,7 +95,7 @@ async def make_subqueries(sql, n_parts=MAX_PARTS):
         low, high = await get_table_bounds(table_name, col)
         if low is None or high is None:
             # Can't determine bounds, don't split
-            return [sql]
+            return [parsed.sql()]
     
     # Create n_parts sub-queries
     step = (high - low + 1) // n_parts
@@ -110,80 +117,202 @@ async def make_subqueries(sql, n_parts=MAX_PARTS):
             # No existing WHERE, just add the BETWEEN
             sub_sql.set("where", exp.Where(this=new_cond))
         
-        subs.append(sub_sql.sql())
+        query_str = sub_sql.sql()
+        print(f"DEBUG: Subquery {i}: {query_str}")
+        subs.append(query_str)
     return subs
 
-def detect_aggregation(parsed):
+def analyze_query(parsed):
     """
-    Detect if query contains aggregate functions.
-    Returns: (has_aggregate, agg_type, agg_column)
-    agg_type can be: 'count', 'sum', 'avg', 'min', 'max', or None
+    Analyze query for aggregation, grouping, and having.
     """
     if not isinstance(parsed, exp.Select):
-        return (False, None, None)
+        return {'is_agg': False, 'group_by': [], 'having': None}
     
-    # Check the SELECT expressions for aggregate functions
-    for expr in parsed.find_all((exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max)):
-        if isinstance(expr, exp.Count):
-            return (True, 'count', None)
-        elif isinstance(expr, exp.Sum):
-            # Extract the column being summed
-            col = list(expr.find_all(exp.Column))
-            col_name = col[0].name if col else None
-            return (True, 'sum', col_name)
-        elif isinstance(expr, exp.Avg):
-            col = list(expr.find_all(exp.Column))
-            col_name = col[0].name if col else None
-            return (True, 'avg', col_name)
-        elif isinstance(expr, exp.Min):
-            col = list(expr.find_all(exp.Column))
-            col_name = col[0].name if col else None
-            return (True, 'min', col_name)
-        elif isinstance(expr, exp.Max):
-            col = list(expr.find_all(exp.Column))
-            col_name = col[0].name if col else None
-            return (True, 'max', col_name)
+    # Check for aggregates
+    agg_type = None
+    agg_col = None
+    agg_alias = None
+    is_agg = False
     
-    return (False, None, None)
+    # Find the aggregate function and its alias
+    for expression in parsed.expressions:
+        # Search inside the expression for aggregate functions
+        found_agg = False
+        for node in expression.find_all((exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max)):
+            is_agg = True
+            found_agg = True
+            if isinstance(node, exp.Count): agg_type = 'count'
+            elif isinstance(node, exp.Sum): agg_type = 'sum'
+            elif isinstance(node, exp.Avg): agg_type = 'avg'
+            elif isinstance(node, exp.Min): agg_type = 'min'
+            elif isinstance(node, exp.Max): agg_type = 'max'
+            
+            # Try to find the column being aggregated
+            if isinstance(node.this, exp.Column):
+                agg_col = node.this.name
+            break
+        
+        if found_agg:
+            agg_alias = expression.alias_or_name
+            break
+            
+    # Check for Group By
+    group_by = []
+    group = parsed.args.get("group")
+    if group:
+        for expr in group.expressions:
+            if isinstance(expr, exp.Column):
+                group_by.append(expr.name)
+            elif isinstance(expr, exp.Literal):
+                group_by.append(str(expr.this))
+            else:
+                group_by.append(expr.alias_or_name)
 
-def merge_aggregates(responses, agg_type):
-    """
-    Reduce phase: merge partial aggregate results from workers.
-    """
-    all_values = []
+    # Check for Having
+    having = parsed.args.get("having")
+    
+    return {
+        'is_agg': is_agg,
+        'agg_type': agg_type,
+        'agg_col': agg_col,
+        'agg_alias': agg_alias,
+        'group_by': group_by,
+        'having': having
+    }
+
+def evaluate_condition(node, row):
+    """Recursively evaluate a HAVING condition against a result row."""
+    import sys
+    
+    if isinstance(node, exp.Literal):
+        if node.is_int: return int(node.this)
+        if node.is_number: return float(node.this)
+        return node.this
+    
+    if isinstance(node, exp.Column):
+        # Match column name or alias (case-insensitive)
+        col_name = node.name
+        val = row.get(col_name)
+        
+        # Try case-insensitive match if not found
+        if val is None:
+            for key in row.keys():
+                if key.lower() == col_name.lower():
+                    val = row[key]
+                    break
+        
+        sys.stderr.write(f"DEBUG evaluate_condition: Column '{col_name}' -> {val} (row keys: {list(row.keys())})\n")
+        sys.stderr.flush()
+        return val
+        
+    # Handle aggregates in HAVING (e.g. COUNT(*) > 5)
+    # We map them to the aggregate alias in the row
+    if isinstance(node, (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max)):
+        # We assume the row contains the result of this aggregate
+        # Heuristic: return the value of the aggregate column
+        for key, val in row.items():
+            if isinstance(val, (int, float)): # Candidate for aggregate result
+                sys.stderr.write(f"DEBUG evaluate_condition: Aggregate -> {val}\n")
+                sys.stderr.flush()
+                return val
+        return 0
+
+    if isinstance(node, exp.GT): 
+        left = evaluate_condition(node.this, row)
+        right = evaluate_condition(node.expression, row)
+        result = left > right if (left is not None and right is not None) else False
+        sys.stderr.write(f"DEBUG evaluate_condition: {left} > {right} = {result}\n")
+        sys.stderr.flush()
+        return result
+    if isinstance(node, exp.LT): return evaluate_condition(node.this, row) < evaluate_condition(node.expression, row)
+    if isinstance(node, exp.GTE): return evaluate_condition(node.this, row) >= evaluate_condition(node.expression, row)
+    if isinstance(node, exp.LTE): return evaluate_condition(node.this, row) <= evaluate_condition(node.expression, row)
+    if isinstance(node, exp.EQ): return evaluate_condition(node.this, row) == evaluate_condition(node.expression, row)
+    if isinstance(node, exp.NEQ): return evaluate_condition(node.this, row) != evaluate_condition(node.expression, row)
+    if isinstance(node, exp.And): return evaluate_condition(node.this, row) and evaluate_condition(node.expression, row)
+    if isinstance(node, exp.Or): return evaluate_condition(node.this, row) or evaluate_condition(node.expression, row)
+    
+    return False
+
+def merge_grouped_results(responses, agg_type, agg_alias):
+    """Merge results from workers for GROUP BY queries."""
+    grouped_data = {}
     
     for r in responses:
         if r.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"Worker error: {r.text}")
-        rows = r.json()["rows"]
+            print(f"DEBUG: Worker failed: {r.status_code} {r.text}")
+            continue
+            
+        data = r.json()
+        rows = data.get("rows", [])
+        print(f"DEBUG: Worker returned {len(rows)} rows")
         
-        # Each worker should return exactly one row with the partial aggregate
+        for row in rows:
+            # Extract aggregate value
+            agg_val = row.get(agg_alias)
+            if agg_val is None:
+                # Fallback: assume 'count' or similar common names
+                if 'count' in row: agg_val = row['count']
+                elif 'sum' in row: agg_val = row['sum']
+                elif 'min' in row: agg_val = row['min']
+                elif 'max' in row: agg_val = row['max']
+                elif 'avg' in row: agg_val = row['avg']
+                else: agg_val = list(row.values())[-1] # Last resort
+            
+            # Extract group keys
+            if agg_alias and agg_alias in row:
+                group_items = tuple((k, v) for k, v in row.items() if k != agg_alias)
+            else:
+                # Fallback: exclude the value we identified as aggregate (risky but necessary if no alias)
+                # We try to exclude only the specific key that held the value if possible
+                # But here we iterate all items.
+                group_items = tuple((k, v) for k, v in row.items() if v != agg_val)
+            
+            if group_items not in grouped_data:
+                grouped_data[group_items] = []
+            grouped_data[group_items].append(agg_val)
+            
+    final_rows = []
+    for group_items, values in grouped_data.items():
+        if agg_type in ('count', 'sum'):
+            res = sum(values)
+        elif agg_type == 'min':
+            res = min(values)
+        elif agg_type == 'max':
+            res = max(values)
+        elif agg_type == 'avg':
+            res = sum(values) / len(values)
+        else:
+            res = values[0]
+            
+        new_row = dict(group_items)
+        # Add aggregate result
+        key_name = agg_alias if agg_alias else 'result'
+        new_row[key_name] = res
+        final_rows.append(new_row)
+        
+    return {"rows": final_rows}
+
+def merge_aggregates(responses, agg_type):
+    """Legacy merger for scalar aggregates."""
+    all_values = []
+    for r in responses:
+        if r.status_code != 200: continue
+        rows = r.json()["rows"]
         if len(rows) > 0:
-            # Get the first column value (the aggregate result)
             first_key = list(rows[0].keys())[0]
             value = rows[0][first_key]
-            
-            # Handle None values (e.g., COUNT on empty set)
             if value is not None:
                 all_values.append(value)
     
-    if not all_values:
-        return {"rows": [{"result": 0}]}
+    if not all_values: return {"rows": [{"result": 0}]}
     
-    # Perform the final reduction based on aggregate type
-    if agg_type == 'count' or agg_type == 'sum':
-        result = sum(all_values)
-    elif agg_type == 'avg':
-        # For AVG, workers should return (sum, count) pairs
-        # For simplicity in MVP, we'll just average the averages (not perfectly accurate)
-        # TODO: Improve this by having workers return sum and count separately
-        result = sum(all_values) / len(all_values)
-    elif agg_type == 'min':
-        result = min(all_values)
-    elif agg_type == 'max':
-        result = max(all_values)
-    else:
-        result = all_values[0]
+    if agg_type in ('count', 'sum'): result = sum(all_values)
+    elif agg_type == 'avg': result = sum(all_values) / len(all_values)
+    elif agg_type == 'min': result = min(all_values)
+    elif agg_type == 'max': result = max(all_values)
+    else: result = all_values[0]
     
     return {"rows": [{"result": result}]}
 
@@ -200,18 +329,40 @@ async def dispatch(payload: dict):
 
         parsed = parse_one(sql)
         
-        # Detect if this is an aggregate query
-        has_aggregate, agg_type, agg_column = detect_aggregation(parsed)
+        # Analyze query structure
+        analysis = analyze_query(parsed)
+        is_agg = analysis['is_agg']
+        agg_type = analysis['agg_type']
+        group_by = analysis['group_by']
+        having = analysis['having']
         
-        if has_aggregate:
+        print(f"DEBUG dispatch: is_agg={is_agg}, agg_type={agg_type}, group_by={group_by}, having={having is not None}")
+        
+        if is_agg:
             AGG_QUERIES.labels(agg_type=agg_type).inc()
+        if group_by:
+            GROUP_BY_QUERIES.inc()
         
         # Check if splitting will be dynamic
         where = parsed.args.get("where")
         if not where or not list(where.find_all(exp.Literal)):
             DYNAMIC_SPLITS.inc()
         
-        subqueries = await make_subqueries(sql) if can_split(parsed) else [sql]
+        can_split_query = can_split(parsed)
+        print(f"DEBUG dispatch: can_split={can_split_query}")
+        
+        if can_split_query:
+            subqueries = await make_subqueries(sql)
+        else:
+            # Even if we don't split, we need to remove HAVING clause
+            # because it must be applied after merging results
+            parsed_no_having = parse_one(sql)
+            if parsed_no_having.args.get("having"):
+                print(f"DEBUG dispatch: Removing HAVING from non-split query")
+                parsed_no_having.set("having", None)
+            subqueries = [parsed_no_having.sql()]
+            
+        print(f"DEBUG dispatch: Generated {len(subqueries)} subqueries")
         SPLIT_TOTAL.inc(len(subqueries))
         WORKER_REQUESTS.inc(len(subqueries))
 
@@ -220,8 +371,10 @@ async def dispatch(payload: dict):
             tasks = [client.post(WORKER_URL, json={"sql": q}) for q in subqueries]
             responses = await asyncio.gather(*tasks)
 
-        # Use appropriate merge strategy based on query type
-        if has_aggregate:
+        # Merge results
+        if group_by:
+            result = merge_grouped_results(responses, agg_type, analysis['agg_alias'])
+        elif is_agg:
             result = merge_aggregates(responses, agg_type)
         else:
             # Standard row concatenation for non-aggregate queries
@@ -231,9 +384,32 @@ async def dispatch(payload: dict):
                     raise HTTPException(status_code=502, detail=f"Worker error: {r.text}")
                 merged.extend(r.json()["rows"])
             result = {"rows": merged}
+            
+        # Apply HAVING clause if present
+        if having and result["rows"]:
+            print(f"DEBUG dispatch: Applying HAVING filter to {len(result['rows'])} rows")
+            print(f"DEBUG dispatch: HAVING node type: {type(having)}")
+            print(f"DEBUG dispatch: HAVING node: {having}")
+            
+            # Extract the actual condition from the Having node
+            having_condition = having.this if hasattr(having, 'this') else having
+            print(f"DEBUG dispatch: HAVING condition: {having_condition}")
+            print(f"DEBUG dispatch: Sample row: {result['rows'][0] if result['rows'] else 'none'}")
+            
+            filtered_rows = []
+            for row in result["rows"]:
+                try:
+                    passes = evaluate_condition(having_condition, row)
+                    print(f"DEBUG dispatch: Row {row} -> passes={passes}")
+                    if passes:
+                        filtered_rows.append(row)
+                except Exception as e:
+                    print(f"DEBUG dispatch: Error evaluating row {row}: {e}")
+            print(f"DEBUG dispatch: After HAVING filter: {len(filtered_rows)} rows")
+            result["rows"] = filtered_rows
         
         # Record latency
-        query_type = f"{agg_type}_aggregate" if has_aggregate else "select"
+        query_type = f"{agg_type}_aggregate" if is_agg else "select"
         QUERY_LATENCY.labels(query_type=query_type).observe(time.time() - start_time)
         
         return result
