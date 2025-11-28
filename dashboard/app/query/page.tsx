@@ -12,24 +12,25 @@ export default function QueryPage() {
   const [result, setResult] = useState<any>(null);
   const [executionPlan, setExecutionPlan] = useState<any[]>([]);
   const [cpuUsage, setCpuUsage] = useState(12);
-  const [workerCount, setWorkerCount] = useState(4);
+  const [workers, setWorkers] = useState<any[]>([]);
+  const workerCount = workers.length || 4;
 
-  // Fetch real worker count
+  // Fetch real worker count and details
   useEffect(() => {
-    const fetchWorkerCount = async () => {
+    const fetchWorkers = async () => {
       try {
         const response = await fetch('/api/k8s-status');
         const data = await response.json();
-        if (data.totalWorkers) {
-          setWorkerCount(data.totalWorkers);
+        if (data.workers) {
+          setWorkers(data.workers);
         }
       } catch (error) {
-        console.error('Failed to fetch worker count:', error);
+        console.error('Failed to fetch workers:', error);
       }
     };
 
-    fetchWorkerCount();
-    const interval = setInterval(fetchWorkerCount, 5000); // Update every 5 seconds
+    fetchWorkers();
+    const interval = setInterval(fetchWorkers, 5000); // Update every 5 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -47,14 +48,46 @@ export default function QueryPage() {
         avgLatency: 0.045,
         workerRequests: 4980,
         dynamicSplits: 312,
+        workerStats: {},
+        queryStats: {}
       };
       
+      // Calculate splits based on query complexity and active workers
+      const activeWorkerCount = workers.length > 0 ? workers.length : 4;
+      const isComplex = query.toUpperCase().includes('JOIN') || query.toUpperCase().includes('GROUP BY') || query.toUpperCase().includes('ORDER BY');
+      const estimatedSplits = isComplex ? activeWorkerCount : Math.max(1, Math.floor(activeWorkerCount / 2));
+
+      // Distribute splits among workers
+      const newWorkerStats = { ...(currentMetrics.workerStats || {}) };
+      const activeWorkers = workers.length > 0 ? workers : [
+        { name: "worker-1" }, { name: "worker-2" }, { name: "worker-3" }, { name: "worker-4" }
+      ];
+
+      for (let i = 0; i < estimatedSplits; i++) {
+        const worker = activeWorkers[i % activeWorkers.length];
+        const name = worker.name || `Worker ${worker.id}`;
+        newWorkerStats[name] = (newWorkerStats[name] || 0) + 1;
+      }
+
       const updatedMetrics = {
         totalRequests: currentMetrics.totalRequests + 1,
         avgLatency: currentMetrics.avgLatency,
-        workerRequests: currentMetrics.workerRequests + workerCount, // Use actual worker count
-        dynamicSplits: currentMetrics.dynamicSplits + 1,
+        workerRequests: currentMetrics.workerRequests + estimatedSplits,
+        dynamicSplits: currentMetrics.dynamicSplits + (estimatedSplits > 1 ? 1 : 0),
+        workerStats: newWorkerStats,
+        queryStats: currentMetrics.queryStats || {}
       };
+
+      // Determine query type
+      let queryType = "SELECT";
+      const upperSql = query.toUpperCase();
+      if (upperSql.includes("COUNT")) queryType = "COUNT";
+      else if (upperSql.includes("SUM")) queryType = "SUM";
+      else if (upperSql.includes("AVG")) queryType = "AVG";
+      else if (upperSql.includes("MIN") || upperSql.includes("MAX")) queryType = "MIN/MAX";
+      
+      updatedMetrics.queryStats[queryType] = (updatedMetrics.queryStats[queryType] || 0) + 1;
+
       
       localStorage.setItem('dashboardMetrics', JSON.stringify(updatedMetrics));
       console.log('Metrics updated in localStorage:', updatedMetrics);

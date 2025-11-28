@@ -22,6 +22,14 @@ export default function DashboardPage() {
 
   const [workers, setWorkers] = useState<any[]>([]);
 
+  const [queryTypeData, setQueryTypeData] = useState([
+    { name: "SELECT", value: 0, color: "#3b82f6" },
+    { name: "COUNT", value: 0, color: "#8b5cf6" },
+    { name: "SUM", value: 0, color: "#10b981" },
+    { name: "MIN/MAX", value: 0, color: "#f59e0b" },
+    { name: "AVG", value: 0, color: "#ef4444" },
+  ]);
+
   // Load from localStorage after mount (client-side only)
   useEffect(() => {
     const loadMetrics = () => {
@@ -31,6 +39,16 @@ export default function DashboardPage() {
           const parsed = JSON.parse(saved);
           console.log('Dashboard: Loading metrics from localStorage:', parsed);
           setMetrics(parsed);
+          
+          if (parsed.queryStats) {
+            setQueryTypeData([
+              { name: "SELECT", value: parsed.queryStats["SELECT"] || 0, color: "#3b82f6" },
+              { name: "COUNT", value: parsed.queryStats["COUNT"] || 0, color: "#8b5cf6" },
+              { name: "SUM", value: parsed.queryStats["SUM"] || 0, color: "#10b981" },
+              { name: "MIN/MAX", value: parsed.queryStats["MIN/MAX"] || 0, color: "#f59e0b" },
+              { name: "AVG", value: parsed.queryStats["AVG"] || 0, color: "#ef4444" },
+            ]);
+          }
         } catch (e) {
           console.error('Failed to load metrics:', e);
         }
@@ -150,13 +168,7 @@ export default function DashboardPage() {
     { time: "14:00", latency: Math.floor(metrics.avgLatency * 1000), throughput: Math.floor(metrics.totalRequests / 10) },
   ];
 
-  const queryTypeData = [
-    { name: "SELECT", value: 45, color: "#3b82f6" },
-    { name: "COUNT", value: 25, color: "#8b5cf6" },
-    { name: "SUM", value: 15, color: "#10b981" },
-    { name: "MIN/MAX", value: 10, color: "#f59e0b" },
-    { name: "AVG", value: 5, color: "#ef4444" },
-  ];
+
 
   const workerLoadData = workers.length > 0 
     ? workers.map(w => ({

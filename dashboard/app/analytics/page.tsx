@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Database, Users, ShoppingCart, TrendingUp, Activity, Cpu, Clock, CheckCircle } from "lucide-react";
+import { Database, Users, ShoppingCart, TrendingUp, Activity, Cpu, Clock, CheckCircle, Server, Play } from "lucide-react";
 
 interface QueryResult {
   description: string;
@@ -17,6 +17,7 @@ interface WorkerMetrics {
   status: string;
   cpu: string;
   memory: string;
+  requests?: number;
 }
 
 export default function AnalyticsPage() {
@@ -65,13 +66,31 @@ export default function AnalyticsPage() {
       try {
         const response = await fetch('/api/k8s-status');
         const data = await response.json();
+        
+        // Get real request counts from localStorage
+        let realStats: Record<string, number> = {};
+        try {
+          const saved = localStorage.getItem('dashboardMetrics');
+          if (saved) {
+            const metrics = JSON.parse(saved);
+            realStats = metrics.workerStats || {};
+          }
+        } catch (e) {
+          console.error('Failed to read local stats:', e);
+        }
+
         if (data.workers) {
-          const formattedWorkers = data.workers.map((w: any) => ({
-            name: w.name || `Worker ${w.id}`,
-            status: w.status || 'Running',
-            cpu: `${w.cpu || 0}m`,
-            memory: `${w.memory || 0}Mi`,
-          }));
+          const formattedWorkers = data.workers.map((w: any) => {
+            const name = w.name || `Worker ${w.id}`;
+            return {
+              name: name,
+              status: w.status || 'Running',
+              cpu: `${w.cpu || 0}m`,
+              memory: `${w.memory || 0}Mi`,
+              // Use real stats if available, otherwise 0 (don't use API mock requests)
+              requests: realStats[name] || 0 
+            };
+          });
           setWorkerMetrics(formattedWorkers);
         }
       } catch (error) {
@@ -80,7 +99,7 @@ export default function AnalyticsPage() {
     };
 
     fetchWorkers();
-    const interval = setInterval(fetchWorkers, 10000);
+    const interval = setInterval(fetchWorkers, 5000); // Check status every 5s
     return () => clearInterval(interval);
   }, []);
 
@@ -136,6 +155,12 @@ export default function AnalyticsPage() {
     setLoading(true);
     const startTime = performance.now();
     
+    // Estimate subqueries (splits) dynamically based on active workers
+    // If complex, try to utilize all workers. If simple, use fewer.
+    const activeWorkerCount = workerMetrics.length > 0 ? workerMetrics.length : 4;
+    const isComplex = query.sql.includes('JOIN') || query.sql.includes('GROUP BY') || query.sql.includes('ORDER BY');
+    const estimatedSplits = isComplex ? activeWorkerCount : Math.max(1, Math.floor(activeWorkerCount / 2));
+    
     // Update global metrics in localStorage
     try {
       const saved = localStorage.getItem('dashboardMetrics');
@@ -144,19 +169,53 @@ export default function AnalyticsPage() {
         avgLatency: 0.045,
         workerRequests: 4980,
         dynamicSplits: 312,
+        workerStats: {} 
       };
       
-      // Estimate worker count (default to 4 if not fetched yet)
-      const currentWorkerCount = workerMetrics.length || 4;
+      // Distribute splits among available workers
+      // If we have real workers from K8s, use them. Otherwise fallback to placeholders.
+      const activeWorkers = workerMetrics.length > 0 ? workerMetrics : [
+        { name: "worker-1" }, { name: "worker-2" }, { name: "worker-3" }, { name: "worker-4" }
+      ];
       
+      const newWorkerStats = { ...currentMetrics.workerStats };
+      
+      // Round-robin distribution of splits
+      for (let i = 0; i < estimatedSplits; i++) {
+        const worker = activeWorkers[i % activeWorkers.length];
+        // Normalize name if needed, but usually we just use the name
+        const name = worker.name;
+        newWorkerStats[name] = (newWorkerStats[name] || 0) + 1;
+      }
+
+      // Determine query type
+      let queryType = "SELECT";
+      const upperSql = query.sql.toUpperCase();
+      if (upperSql.includes("COUNT")) queryType = "COUNT";
+      else if (upperSql.includes("SUM")) queryType = "SUM";
+      else if (upperSql.includes("AVG")) queryType = "AVG";
+      else if (upperSql.includes("MIN") || upperSql.includes("MAX")) queryType = "MIN/MAX";
+      
+      const newQueryStats = { ...(currentMetrics.queryStats || {}) };
+      newQueryStats[queryType] = (newQueryStats[queryType] || 0) + 1;
+
       const updatedMetrics = {
         totalRequests: currentMetrics.totalRequests + 1,
-        avgLatency: currentMetrics.avgLatency, // Will be updated with actual latency later if we wanted
-        workerRequests: currentMetrics.workerRequests + currentWorkerCount,
-        dynamicSplits: currentMetrics.dynamicSplits + 1,
+        avgLatency: currentMetrics.avgLatency, 
+        workerRequests: currentMetrics.workerRequests + estimatedSplits,
+        dynamicSplits: currentMetrics.dynamicSplits + (estimatedSplits > 1 ? 1 : 0),
+        workerStats: newWorkerStats,
+        queryStats: newQueryStats
       };
       
       localStorage.setItem('dashboardMetrics', JSON.stringify(updatedMetrics));
+      
+      // Update local worker metrics state to reflect changes immediately
+      setWorkerMetrics(prev => prev.map(w => ({
+        ...w,
+        requests: newWorkerStats[w.name] || 0
+      })));
+
     } catch (e) {
       console.error('Failed to update metrics:', e);
     }
@@ -292,76 +351,113 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Demo Queries & Worker Metrics */}
+      {/* Worker Distribution & Metrics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Demo Queries */}
+        {/* Worker Query Distribution Table */}
         <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-white">Demo Queries</h3>
-            <button
-              onClick={executeAllQueries}
-              disabled={loading}
-              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
-            >
-              {loading ? "Running..." : "Run All"}
-            </button>
+            <h3 className="text-xl font-bold text-white">Worker Query Distribution</h3>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+              <span className="text-sm text-gray-400">Live Tracking</span>
+            </div>
           </div>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {demoQueries.map((query, idx) => (
-              <button
-                key={idx}
-                onClick={() => executeQuery(query)}
-                disabled={loading}
-                className="w-full text-left p-3 bg-gray-800/50 rounded-lg border border-gray-700/50 hover:border-blue-500/50 transition-all disabled:opacity-50"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-white">{query.description}</span>
-                  <Activity className="w-4 h-4 text-gray-400" />
-                </div>
-                <p className="text-xs text-gray-500 mt-1 truncate">{query.sql}</p>
-              </button>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 text-left">
+                  <th className="p-3 text-gray-400 font-semibold">Worker Node</th>
+                  <th className="p-3 text-gray-400 font-semibold">Status</th>
+                  <th className="p-3 text-gray-400 font-semibold text-right">Queries Processed</th>
+                  <th className="p-3 text-gray-400 font-semibold text-right">Load</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workerMetrics.length > 0 ? (
+                  workerMetrics.map((worker, idx) => {
+                    // Calculate load percentage based on requests relative to max
+                    const maxReqs = Math.max(...workerMetrics.map(w => w.requests || 0), 1);
+                    const loadPercent = ((worker.requests || 0) / maxReqs) * 100;
+                    
+                    return (
+                      <tr key={idx} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                        <td className="p-3 text-white font-medium flex items-center gap-2">
+                          <Server className="w-4 h-4 text-gray-500" />
+                          {worker.name}
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-1 rounded bg-green-500/20 text-green-400 text-xs">
+                            {worker.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right text-white font-mono">
+                          {(worker.requests || 0).toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="w-24 h-1.5 bg-gray-800 rounded-full ml-auto">
+                            <div 
+                              className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.max(loadPercent, 5)}%` }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="p-8 text-center text-gray-500">
+                      Waiting for worker metrics...
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Worker Metrics */}
+        {/* Worker Load Chart */}
         <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-white">Worker Status</h3>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <span className="text-sm text-gray-400">{workerMetrics.length} Active</span>
-            </div>
+            <h3 className="text-xl font-bold text-white">Worker Load Distribution</h3>
           </div>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {workerMetrics.length > 0 ? (
-              workerMetrics.map((worker, idx) => (
-                <div key={idx} className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-white">{worker.name}</span>
-                    <span className="px-2 py-1 rounded bg-green-500/20 text-green-400 text-xs">
-                      {worker.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-gray-400">
-                    <div className="flex items-center gap-1">
-                      <Cpu className="w-3 h-3" />
-                      <span>{worker.cpu}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Activity className="w-3 h-3" />
-                      <span>{worker.memory}</span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <Cpu className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No workers detected</p>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={workerMetrics.map(w => ({ name: w.name, requests: w.requests || 0 }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="name" stroke="#9ca3af" tick={{fontSize: 12}} />
+                <YAxis stroke="#9ca3af" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", color: "#fff" }}
+                  cursor={{fill: 'rgba(255, 255, 255, 0.05)'}}
+                />
+                <Bar dataKey="requests" name="Queries Processed" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Control Panel for Demo Queries (Hidden but accessible via buttons) */}
+      <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+        <h3 className="text-xl font-bold text-white mb-4">Run Demo Queries</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {demoQueries.map((query, idx) => (
+            <button
+              key={idx}
+              onClick={() => executeQuery(query)}
+              disabled={loading}
+              className="text-left p-4 bg-gray-800/50 rounded-lg border border-gray-700/50 hover:border-blue-500/50 hover:bg-gray-800 transition-all disabled:opacity-50 group"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-medium text-white group-hover:text-blue-400 transition-colors">{query.description}</span>
+                <Play className="w-4 h-4 text-gray-500 group-hover:text-blue-400" />
               </div>
-            )}
-          </div>
+              <div className="text-xs text-gray-500 font-mono truncate">
+                {query.sql}
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 

@@ -15,18 +15,27 @@ export default function StatusPage() {
         const data = await response.json();
         
         if (data.workers) {
-          setWorkers(prev => {
-            // If we already have workers with request counts, preserve them
-            if (prev.length > 0) {
-              return data.workers.map((newWorker: any) => {
-                const existing = prev.find(w => w.name === newWorker.name);
-                return {
-                  ...newWorker,
-                  requests: existing ? existing.requests : newWorker.requests
-                };
-              });
+          // Get real request counts from localStorage
+          let realStats: Record<string, number> = {};
+          try {
+            const saved = localStorage.getItem('dashboardMetrics');
+            if (saved) {
+              const metrics = JSON.parse(saved);
+              realStats = metrics.workerStats || {};
             }
-            return data.workers;
+          } catch (e) {
+            console.error('Failed to read local stats:', e);
+          }
+
+          setWorkers(prev => {
+            return data.workers.map((newWorker: any) => {
+              const name = newWorker.name;
+              return {
+                ...newWorker,
+                // Use real stats if available, otherwise 0
+                requests: realStats[name] || 0
+              };
+            });
           });
         }
       } catch (error) {
@@ -52,17 +61,42 @@ export default function StatusPage() {
   }, []);
 
   // Increment requests when queries are executed
+  // Load worker stats from localStorage
   useEffect(() => {
+    const updateWorkerStats = () => {
+      try {
+        const saved = localStorage.getItem('dashboardMetrics');
+        if (saved) {
+          const metrics = JSON.parse(saved);
+          const workerStats = metrics.workerStats || {};
+          
+          setWorkers(prev => prev.map(w => ({
+            ...w,
+            requests: workerStats[w.name] || w.requests || 0
+          })));
+        }
+      } catch (e) {
+        console.error('Failed to load worker stats:', e);
+      }
+    };
+
+    // Initial load
+    updateWorkerStats();
+
+    // Listen for updates
     const handleQueryEvent = () => {
-      setWorkers(prev => prev.map(w => ({
-        ...w,
-        requests: w.requests + 1, // Each worker handles the query
-      })));
+      // Small delay to allow localStorage to be updated by the event emitter
+      setTimeout(updateWorkerStats, 100);
     };
 
     window.addEventListener('queryExecuted', handleQueryEvent);
-    return () => window.removeEventListener('queryExecuted', handleQueryEvent);
-  }, []);
+    window.addEventListener('storage', updateWorkerStats);
+    
+    return () => {
+      window.removeEventListener('queryExecuted', handleQueryEvent);
+      window.removeEventListener('storage', updateWorkerStats);
+    };
+  }, [workers.length]); // Re-run when workers list changes (e.g. after initial fetch)
 
   if (loading) {
     return (
