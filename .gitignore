@@ -14,3 +14,7 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+dashboard/.next/
+node_modules/
+dashboard/node_modules/
+
