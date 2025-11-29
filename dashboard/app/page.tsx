@@ -83,14 +83,29 @@ export default function DashboardPage() {
     }
   }, [metrics]);
 
-  // Fetch real worker data from Kubernetes
+  // Fetch real worker data from Kubernetes and merge with local stats
   useEffect(() => {
     const fetchWorkers = async () => {
       try {
         const response = await fetch('/api/k8s-status');
         const data = await response.json();
+        
+        // Merge with localStorage stats for consistency
+        const saved = localStorage.getItem('dashboardMetrics');
+        let realStats: Record<string, number> = {};
+        if (saved) {
+          const metrics = JSON.parse(saved);
+          realStats = metrics.workerStats || {};
+        }
+
         if (data.workers) {
-          setWorkers(data.workers);
+          const mergedWorkers = data.workers.map((w: any) => {
+            const name = w.name || `Worker ${w.id}`;
+            // Use persistent request count if available
+            const requests = realStats[name] || realStats[`worker-${w.id}`] || 0;
+            return { ...w, requests };
+          });
+          setWorkers(mergedWorkers);
         }
       } catch (error) {
         console.error('Failed to fetch workers:', error);
@@ -98,7 +113,7 @@ export default function DashboardPage() {
     };
 
     fetchWorkers();
-    const interval = setInterval(fetchWorkers, 5000); // Refresh every 5 seconds
+    const interval = setInterval(fetchWorkers, 2000); // Refresh every 2 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -172,8 +187,8 @@ export default function DashboardPage() {
 
   const workerLoadData = workers.length > 0 
     ? workers.map(w => ({
-        worker: `Worker ${w.id}`,
-        load: Math.floor(w.cpu) // Use real CPU usage as load
+        worker: w.name || `Worker ${w.id}`,
+        load: w.requests // Use cumulative requests for stable, non-fluctuating load
       }))
     : [
         { worker: "Worker 1", load: 23 },
@@ -237,7 +252,6 @@ export default function DashboardPage() {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                 outerRadius={100}
                 fill="#8884d8"
                 dataKey="value"
@@ -247,6 +261,7 @@ export default function DashboardPage() {
                 ))}
               </Pie>
               <Tooltip />
+              <Legend verticalAlign="bottom" height={36}/>
             </PieChart>
           </ResponsiveContainer>
         </div>

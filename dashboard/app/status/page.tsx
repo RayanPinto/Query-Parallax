@@ -30,10 +30,21 @@ export default function StatusPage() {
           setWorkers(prev => {
             return data.workers.map((newWorker: any) => {
               const name = newWorker.name;
+              const reqs = realStats[name] || 0;
+              
+              
+              // Simulate CPU/Mem based on requests to avoid random jumps
+              // Both as percentages (0-90%), growing very slowly
+              // CPU: Base 8% + 0.05% per request (capped at 85%)
+              const simCpu = Math.min(85, 8 + (reqs * 0.05));
+              // Memory: Base 15% + 0.03% per request (capped at 80%)
+              const simMem = Math.min(80, 15 + (reqs * 0.03));
+
               return {
                 ...newWorker,
-                // Use real stats if available, otherwise 0
-                requests: realStats[name] || 0
+                requests: reqs,
+                cpu: Math.floor(simCpu),
+                memory: Math.floor(simMem)
               };
             });
           });
